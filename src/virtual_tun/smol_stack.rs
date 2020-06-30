@@ -23,7 +23,7 @@ use std::ffi::c_void;
 use std::ptr;
 use std::rc::Rc;
 use std::slice;
-use std::sync::{Arc, Mutex, Condvar};
+use std::sync::{Arc, Condvar, Mutex};
 
 #[derive(PartialEq, Clone)]
 pub enum SocketType {
@@ -90,7 +90,6 @@ impl<'a> SmolSocket {
         self.to_send.lock().unwrap().push_back(packet);
         0
     }
-    
     //TODO: figure out a better way than copying. Inneficient receive
     pub fn receive(
         &mut self,
@@ -166,7 +165,7 @@ where
         device: DeviceT,
         fd: Option<i32>,
         packets_from_inside: Option<Arc<(Mutex<VecDeque<Vec<u8>>>, Condvar)>>,
-        packets_from_outside:  Option<Arc<(Mutex<VecDeque<Blob>>, Condvar)>>,
+        packets_from_outside: Option<Arc<(Mutex<VecDeque<Blob>>, Condvar)>>,
     ) -> SmolStack<'a, 'b, 'c, DeviceT> {
         let socket_set = SocketSet::new(vec![]);
         let ip_addrs = std::vec::Vec::new();
@@ -371,7 +370,7 @@ where
                                 .send_slice(&packet.blob.data.as_slice()[packet.blob.start..]);
                             match bytes_sent {
                                 Ok(bytes_sent) => {
-                                    /*  
+                                    /*
                                         Sent less than entire packet, so we must put this packet
                                         in `smol_socket.current_to_send` so it's returned the next time
                                         so we can continue sending it
@@ -419,9 +418,7 @@ where
                 }
                 0
             }
-            SocketType::UDP => {
-                panic!("not implemented yet")
-            }
+            SocketType::UDP => panic!("not implemented yet"),
             //TODO
             SocketType::ICMP => panic!("not implemented yet"),
             SocketType::RAW_IPV4 => panic!("not implemented yet"),
@@ -429,27 +426,30 @@ where
         }
     }
 
+    //Send a packet to the stack (Ethernet/IP)
+    //not to confuse with TCP/UDP/etc packets
     pub fn send(&mut self, blob: Blob) -> u8 {
-        self.packets_from_outside.as_ref().unwrap().lock().unwrap().push_back(blob);
+        let (packets_from_outside, condvar) = &*self.packets_from_outside.as_ref().unwrap().clone();
+        packets_from_outside.lock().unwrap().push_back(blob);
         0
     }
 
     /*
         TODO: figure out a better way than copying. Inneficient receive
     */
+    //Receive a packet from the stack (Ethernet/IP)
+    //not to confuse with TCP/UDP/etc packets
     pub fn receive(
         &mut self,
         cbuffer: *mut CBuffer,
         allocate_function: extern "C" fn(size: usize) -> *mut u8,
     ) -> u8 {
         let s;
+        let (packets_from_inside, condvar) = &*self.packets_from_inside.as_ref().unwrap().clone();
         {
             //Create a scope so we hold the queue for the least ammount needed
             //TODO: do I really need to create a scope?
-            s = self
-                .packets_from_inside
-                .as_ref()
-                .unwrap()
+            s = packets_from_inside
                 .lock()
                 .unwrap()
                 .pop_front()
@@ -461,7 +461,7 @@ where
                 //Fills the pointer
                 unsafe { ptr::copy(s.as_ptr(), p, s.len()) };
                 //Sends the pointer back to C++, which has the responsibility
-                //to delete it 
+                //to delete it
                 unsafe {
                     *cbuffer = CBuffer {
                         data: p,

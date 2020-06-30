@@ -5,21 +5,20 @@ use std::cell::RefCell;
 use std::io;
 use std::rc::Rc;
 use std::vec::Vec;
-//use std::os::unix::io::{RawFd, AsRawFd};
-use std::collections::VecDeque;
-use std::sync::{Arc, Mutex, Condvar};
 use super::smol_stack::Blob;
 use smoltcp::phy::{self, Device, DeviceCapabilities, Medium};
 use smoltcp::time::Instant;
 use smoltcp::{Error, Result};
+use std::collections::VecDeque;
+use std::sync::{Arc, Condvar, Mutex};
 
 use std::isize;
 use std::ops::Deref;
 use std::slice;
 
-
+static ERR_WOULD_BLOCK: u32 = 1;
 /// A virtual TUN interface.
-//#[derive(Debug)]
+
 #[derive(Clone)]
 pub struct VirtualTunInterface {
     mtu: usize,
@@ -28,13 +27,11 @@ pub struct VirtualTunInterface {
 }
 
 impl<'a> VirtualTunInterface {
-    
     pub fn new(
         _name: &str,
         packets_from_inside: Arc<(Mutex<VecDeque<Vec<u8>>>, Condvar)>,
         packets_from_outside: Arc<(Mutex<VecDeque<Blob>>, Condvar)>,
     ) -> Result<VirtualTunInterface> {
-        
         let mtu = 1500; //??
         Ok(VirtualTunInterface {
             mtu: mtu,
@@ -42,17 +39,26 @@ impl<'a> VirtualTunInterface {
             packets_from_inside: packets_from_inside,
         })
     }
-
+    //TODO: this cant block, I guess?? Or it can..
     fn recv(&mut self, buffer: &mut [u8]) -> core::result::Result<usize, u32> {
         //TODO: should I clone?
         let (packets_from_outside, condvar) = &*self.packets_from_outside.clone();
-        match packets_from_outside.lock().unwrap().pop_front() {
+        let p;
+        {
+            p = packets_from_outside.lock().unwrap().pop_front();
+        }
+        match p {
             Some(packet) => {
                 buffer.copy_from_slice(packet.data.as_slice());
                 condvar.notify_one();
                 Ok(packet.data.len())
             }
-            None => Err(1),
+            /*
+                Simply return 1. Device::receive(&mut self) is prepared
+                to assume that it'd block so it does nothing in this case
+                (returns None)
+            */
+            None => Err(ERR_WOULD_BLOCK),
         }
     }
 }
@@ -78,7 +84,8 @@ impl<'d> Device<'d> for VirtualTunInterface {
                 };
                 Some((rx, tx))
             }
-            Err(err) if err == 1 => None,
+            //Simulates a tun/tap device that returns EWOULDBLOCK
+            Err(err) if err == ERR_WOULD_BLOCK => None,
             Err(err) => panic!("{}", err),
         }
     }
@@ -124,7 +131,9 @@ impl<'a> phy::TxToken for TxToken {
         println!("should send NOW packet with size {}", len);
         use std::borrow::BorrowMut;
         let (packets_from_inside, condvar) = &*lower.packets_from_inside.clone();
-        packets_from_inside.lock().unwrap().push_back(buffer);
+        {
+            packets_from_inside.lock().unwrap().push_back(buffer);
+        }
         condvar.notify_one();
         result
     }
