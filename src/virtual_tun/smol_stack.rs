@@ -365,32 +365,27 @@ where
         match smol_socket.socket_type {
             SocketType::TCP => {
                 let mut socket = self.sockets.get::<TcpSocket>(smol_socket.socket_handle);
+                let mut put_back = false;
                 if socket.may_send() {
-                    let packet = smol_socket.get_latest_packet();
-                    match packet {
-                        Some(packet) => {
+                    //Returns None if there are no packets
+                    let mut packet = smol_socket.get_latest_packet();
+                    match &mut packet {
+                        Some(ref mut packet) => {
                             println!("some packet");
-                            /*
-                            use std::str;
-                            if let Ok(s) = str::from_utf8(packet.blob.data) {
-                                println!("{}", s);
-                            }
-                            */
-                            //BIG TODO: send from start of packet wherever it is
-                            let bytes_sent = socket.send_slice(packet.blob.data.as_slice());
+                            //Sends from the start (which might be more than 0 if we didn't send
+                            //an entire packet in the last call)
+                            let bytes_sent = socket
+                                .send_slice(&packet.blob.data.as_slice()[packet.blob.start..]);
                             match bytes_sent {
-                                Ok(b) => {
-                                    println!("sent {} bytes", b);
+                                Ok(bytes_sent) => {
                                     //Sent less than entire packet, so we must put this packet
                                     //in `smol_socket.current_to_send` so it's returned the next time
                                     //so we can continue sending it
-                                    if b < packet.blob.data.len() {
-                                        smol_socket.current_to_send = Some(packet);
-                                        panic!("TOO BIG!");
-                                    //BIG TODO: put it back in case its not possible to send everything!!!!!
-                                    //BIG TODO: account here FOR HOW MUCH HAVE BEEN READ
-
-                                    //0
+                                    if bytes_sent < packet.blob.data.len() {
+                                        let remaining_bytes = packet.blob.data.len() - bytes_sent;
+                                        //start from remaining in the next call
+                                        packet.blob.start = remaining_bytes;
+                                        put_back = true;
                                     } else {
                                         //Sent the entire packet, nothing needs to be done
                                         //0
@@ -398,15 +393,14 @@ where
                                 }
                                 Err(e) => {
                                     println!("bytes not sent, ERROR {}, putting packet back", e);
-                                    //smol_socket.current_to_send = Some(packet);
                                     //1
                                 }
                             }
                         }
-                        None => {
-                            //println!("NO packet");
-                            //1
-                        }
+                        None => {}
+                    }
+                    if put_back {
+                        smol_socket.current_to_send = packet;
                     }
                 } else {
                     //1
@@ -415,13 +409,11 @@ where
                     socket
                         .recv(|data| {
                             let len = data.len();
-                            //println!("{}", str::from_utf8(data).unwrap_or("(invalid utf8)"));
                             {
                                 let mut s = vec![0; len];
                                 s.copy_from_slice(data);
                                 smol_socket.received.lock().unwrap().push_back(s);
                             }
-                            //smol_socket.receive(data);
                             (len, ())
                         })
                         .unwrap();
