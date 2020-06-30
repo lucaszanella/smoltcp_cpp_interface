@@ -22,6 +22,7 @@ pub enum SmolSocketType {
     Tun,
 }
 
+
 #[repr(C)]
 pub struct CBuffer {
     pub data: *mut u8,
@@ -38,6 +39,13 @@ pub struct CBuffer {
 pub enum SmolStackType<'a, 'b: 'a, 'c: 'a + 'b> {
     VirtualTun(SmolStack<'a, 'b, 'c, VirtualTunDevice>),
     Tun(SmolStack<'a, 'b, 'c, TunDevice>),
+}
+
+//TODO: erase when confirmed its working
+impl<'a, 'b: 'a, 'c: 'a + 'b> Drop for SmolStackType<'a, 'b, 'c> {
+    fn drop(&mut self) {
+        println!("dropped SmolStackType");
+    }
 }
 
 impl<'a, 'b: 'a, 'c: 'a + 'b> SmolStackType<'a, 'b, 'c> {
@@ -390,9 +398,6 @@ pub extern "C" fn smol_stack_smol_socket_receive(
     }
 }
 
-//Just by owning the slice again, it kills it?
-pub extern "C" fn rust_kill_slice_u8(slice: &[u8]) {}
-
 #[no_mangle]
 pub extern "C" fn smol_stack_add_socket(
     smol_stack: &mut SmolStackType,
@@ -475,3 +480,6 @@ pub extern "C" fn smol_stack_finalize<'a, 'b: 'a, 'c: 'a + 'b>(
 ) -> u8 {
     smol_stack.finalize()
 }
+
+#[no_mangle]
+pub extern "C" fn smol_stack_destroy(_: Option<Box<SmolStackType>>) {}

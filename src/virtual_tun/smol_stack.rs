@@ -378,9 +378,11 @@ where
                                 .send_slice(&packet.blob.data.as_slice()[packet.blob.start..]);
                             match bytes_sent {
                                 Ok(bytes_sent) => {
-                                    //Sent less than entire packet, so we must put this packet
-                                    //in `smol_socket.current_to_send` so it's returned the next time
-                                    //so we can continue sending it
+                                    /*  
+                                        Sent less than entire packet, so we must put this packet
+                                        in `smol_socket.current_to_send` so it's returned the next time
+                                        so we can continue sending it
+                                    */
                                     if bytes_sent < packet.blob.data.len() {
                                         let remaining_bytes = packet.blob.data.len() - bytes_sent;
                                         //start from remaining in the next call
@@ -399,6 +401,7 @@ where
                         }
                         None => {}
                     }
+                    //Outside of match because it matches as reference so we cannot move
                     if put_back {
                         smol_socket.current_to_send = packet;
                     }

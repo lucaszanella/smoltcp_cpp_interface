@@ -9,6 +9,7 @@ add_library(libsmoltcp_cpp ${libsmoltcp_cpp_sources})
 add_custom_target(
     lib_smol_tcp_rust
     COMMAND cargo build
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
 )
 
 add_dependencies(libsmoltcp_cpp lib_smol_tcp_rust)

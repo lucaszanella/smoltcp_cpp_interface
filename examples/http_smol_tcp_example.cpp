@@ -19,7 +19,6 @@ extern "C" uint8_t destruct(void *smolOwner_)
 
 int main()
 {
-    HandleMap<SmolSocket> smolSockethandleMap;
     TunSmolStack tunSmolStack("tun1", StackType::Tun);
 
     tunSmolStack.addIpv4Address(CIpv4Cidr{
@@ -43,7 +42,6 @@ int main()
         {0xfe80, 0, 0, 0, 0, 0, 0, 0x100}});
 
     SmolSocket smolSocket = tunSmolStack.addSocket(SOCKET_TCP);
-    size_t smolSocketHandle = smolSockethandleMap.emplace(smolSocket);
     uint8_t result = tunSmolStack.finalize();
     CIpEndpoint endpointNone{
         CIpEndpointType::None,

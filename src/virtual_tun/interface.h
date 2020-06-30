@@ -52,43 +52,6 @@ namespace smoltcp
         }
     };
 
-    template <typename T>
-    class HandleMap
-    {
-    public:
-        std::unordered_map<size_t, T> map;
-
-        T &get(size_t key)
-        {
-            auto it = map.find(key);
-            if (it == map.end())
-                throw std::invalid_argument("invalid key");
-            return it->second;
-        }
-
-        size_t emplace(T t)
-        {
-            size_t handle = getNewHandle();
-            map[handle] = t;
-            return handle;
-        }
-
-    private:
-        size_t currentHandle = 0;
-        size_t getNewHandle()
-        {
-            if (currentHandle < std::numeric_limits<size_t>::max())
-            {
-                currentHandle += 1;
-                return currentHandle;
-            }
-            else
-            {
-                throw std::runtime_error("Reached handle too big, you're using too much sockets\n");
-            }
-        }
-    };
-
     struct CIpv4Address
     {
         uint8_t address[4];
@@ -151,6 +114,7 @@ namespace smoltcp
     extern "C" void smol_stack_add_default_v4_gateway(SmolStackPtr, CIpv4Address);
     extern "C" void smol_stack_add_default_v6_gateway(SmolStackPtr, CIpv6Address);
     extern "C" uint8_t smol_stack_finalize(SmolStackPtr);
+    extern "C" void smol_stack_destroy(void *);
 
     enum StackType
     {
@@ -188,21 +152,16 @@ namespace smoltcp
     {
     private:
         /*
-        SmolOwner owns the pointer to this type and
-        it's responsible for deleting it when it's 
-        destructed
-    */
+            SmolOwner owns the pointer to this type and
+            it's responsible for deleting it when it's 
+            destructed
+        */
         T *t;
         SmolOwner(T *t)
         {
             this->t = t;
         }
-        /*
-        Both Rust and C++ keep handles to SmolSocket objects. These handles
-        are passed from C++ to Rust and from Rust to C++ instead of passing
-        pointers to SmolSocket objects, which is unsafe. The values do not need
-        to be equal on both sides. 
-    */
+
     public:
         //Prevents SmolOwner to be created on stack
         static SmolOwner *allocate(T *t)
@@ -279,14 +238,14 @@ namespace smoltcp
         }
 
         /*
-        On the act of send, we specify the handle for the socket, the pointer do the data,
-        which is the most important type, and its lenght. For UDP and IGMP sockets we also
-        have to pass an endpoint (TCP does not need since we call connect before sending).
-        Then, we pass a pointer to `SmolOwner`, which is a class that owns the object that
-        owns `uint8_t* data`. We also pass the destructor function, which is the function 
-        that accepts the `SmolOwner` pointer and deletes it. This function is supposed to
-        be called from Rust when it does not need the data `uint8_t* data` anymore.
-    */
+            On the act of send, we specify the handle for the socket, the pointer do the data,
+            which is the most important type, and its lenght. For UDP and IGMP sockets we also
+            have to pass an endpoint (TCP does not need since we call connect before sending).
+            Then, we pass a pointer to `SmolOwner`, which is a class that owns the object that
+            owns `uint8_t* data`. We also pass the destructor function, which is the function 
+            that accepts the `SmolOwner` pointer and deletes it. This function is supposed to
+            be called from Rust when it does not need the data `uint8_t* data` anymore.
+        */
         template <typename T>
         void send(SmolSocket smolSocket, const uint8_t *data, size_t len, CIpEndpoint endpoint, SmolOwner<T> *pointerToSmolOwner, uint8_t (*smolOwnerDestructor)(void *))
         {
@@ -360,7 +319,7 @@ namespace smoltcp
 
         ~TunSmolStack()
         {
-            //smol_stack_add_destroy()
+            smol_stack_destroy(smolStackPtr);
         }
     };
 } //namespace smoltcp

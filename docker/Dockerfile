@@ -3,7 +3,7 @@ FROM ubuntu:bionic
 WORKDIR /home/project
 
 RUN export DEBIAN_FRONTEND=noninteractive && apt-get update\
-    && apt-get install -y curl autoconf git m4 iproute2 clang wireshark wget
+    && apt-get install -y build-essential curl autoconf git m4 iproute2 clang wireshark wget
 
 RUN curl --proto '=https' --tlsv1.2 -o rust.sh https://sh.rustup.rs\
     && /bin/bash rust.sh -y
