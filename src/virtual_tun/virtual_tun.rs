@@ -7,7 +7,7 @@ use std::rc::Rc;
 use std::vec::Vec;
 //use std::os::unix::io::{RawFd, AsRawFd};
 use std::collections::VecDeque;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, Condvar};
 use super::smol_stack::Blob;
 use smoltcp::phy::{self, Device, DeviceCapabilities, Medium};
 use smoltcp::time::Instant;
@@ -23,34 +23,33 @@ use std::slice;
 #[derive(Clone)]
 pub struct VirtualTunInterface {
     mtu: usize,
-    packets_from_inside: Arc<Mutex<VecDeque<Vec<u8>>>>,
-    packets_from_outside: Arc<Mutex<VecDeque<Blob>>>,
+    packets_from_inside: Arc<(Mutex<VecDeque<Vec<u8>>>, Condvar)>,
+    packets_from_outside: Arc<(Mutex<VecDeque<Blob>>, Condvar)>,
 }
 
 impl<'a> VirtualTunInterface {
-    /// Attaches to a TAP interface called `name`, or creates it if it does not exist.
-    ///
-    /// If `name` is a persistent interface configured with UID of the current user,
-    /// no special privileges are needed. Otherwise, this requires superuser privileges
-    /// or a corresponding capability set on the executable.
+    
     pub fn new(
         _name: &str,
-        packets_from_inside: Arc<Mutex<VecDeque<Vec<u8>>>>,
-        packets_from_outside: Arc<Mutex<VecDeque<Blob>>>,
+        packets_from_inside: Arc<(Mutex<VecDeque<Vec<u8>>>, Condvar)>,
+        packets_from_outside: Arc<(Mutex<VecDeque<Blob>>, Condvar)>,
     ) -> Result<VirtualTunInterface> {
         
         let mtu = 1500; //??
         Ok(VirtualTunInterface {
             mtu: mtu,
-            packets_from_outside: packets_from_outside.clone(),
-            packets_from_inside: packets_from_inside.clone(),
+            packets_from_outside: packets_from_outside,
+            packets_from_inside: packets_from_inside,
         })
     }
 
     fn recv(&mut self, buffer: &mut [u8]) -> core::result::Result<usize, u32> {
-        match self.packets_from_outside.lock().unwrap().pop_front() {
+        //TODO: should I clone?
+        let (packets_from_outside, condvar) = &*self.packets_from_outside.clone();
+        match packets_from_outside.lock().unwrap().pop_front() {
             Some(packet) => {
                 buffer.copy_from_slice(packet.data.as_slice());
+                condvar.notify_one();
                 Ok(packet.data.len())
             }
             None => Err(1),
@@ -124,7 +123,9 @@ impl<'a> phy::TxToken for TxToken {
         let result = f(&mut buffer);
         println!("should send NOW packet with size {}", len);
         use std::borrow::BorrowMut;
-        lower.packets_from_inside.lock().unwrap().push_back(buffer);
+        let (packets_from_inside, condvar) = &*lower.packets_from_inside.clone();
+        packets_from_inside.lock().unwrap().push_back(buffer);
+        condvar.notify_one();
         result
     }
 }

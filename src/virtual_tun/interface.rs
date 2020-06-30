@@ -16,7 +16,7 @@ use std::os::raw::{c_char, c_int};
 use std::os::unix::io::AsRawFd;
 use std::slice;
 use std::str::{self};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, Condvar};
 
 pub enum SmolSocketType {
     VirtualTun,
@@ -53,8 +53,8 @@ impl<'a, 'b: 'a, 'c: 'a + 'b> Drop for SmolStackType<'a, 'b, 'c> {
 
 impl<'a, 'b: 'a, 'c: 'a + 'b> SmolStackType<'a, 'b, 'c> {
     pub fn new_virtual_tun(interface_name: String) -> Box<SmolStackType<'a, 'b, 'c>> {
-        let packets_from_inside = Arc::new(Mutex::new(VecDeque::new()));
-        let packets_from_outside = Arc::new(Mutex::new(VecDeque::new()));
+        let packets_from_inside = Arc::new((Mutex::new(VecDeque::new()), Condvar::new()));
+        let packets_from_outside = Arc::new((Mutex::new(VecDeque::new()), Condvar::new()));
 
         let device = VirtualTunDevice::new(
             interface_name.as_str(),

@@ -23,7 +23,7 @@ use std::ffi::c_void;
 use std::ptr;
 use std::rc::Rc;
 use std::slice;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, Condvar};
 
 #[derive(PartialEq, Clone)]
 pub enum SocketType {
@@ -154,8 +154,8 @@ where
     pub interface: Option<Interface<'a, 'b, 'c, DeviceT>>,
     //For TunInterface only. Couldn't think of a way to
     //create a specialized SmolStack for this case only
-    packets_from_inside: Option<Arc<Mutex<VecDeque<Vec<u8>>>>>,
-    packets_from_outside: Option<Arc<Mutex<VecDeque<Blob>>>>,
+    packets_from_inside: Option<Arc<(Mutex<VecDeque<Vec<u8>>>, Condvar)>>,
+    packets_from_outside: Option<Arc<(Mutex<VecDeque<Blob>>, Condvar)>>,
 }
 
 impl<'a, 'b: 'a, 'c: 'a + 'b, DeviceT> SmolStack<'a, 'b, 'c, DeviceT>
@@ -165,8 +165,8 @@ where
     pub fn new(
         device: DeviceT,
         fd: Option<i32>,
-        packets_from_inside: Option<Arc<Mutex<VecDeque<Vec<u8>>>>>,
-        packets_from_outside: Option<Arc<Mutex<VecDeque<Blob>>>>,
+        packets_from_inside: Option<Arc<(Mutex<VecDeque<Vec<u8>>>, Condvar)>>,
+        packets_from_outside:  Option<Arc<(Mutex<VecDeque<Blob>>, Condvar)>>,
     ) -> SmolStack<'a, 'b, 'c, DeviceT> {
         let socket_set = SocketSet::new(vec![]);
         let ip_addrs = std::vec::Vec::new();
