@@ -35,7 +35,6 @@ pub enum SocketType {
 }
 
 pub struct Blob {
-    //pub slice: &'a [u8],
     pub data: Vec<u8>,
     pub start: usize,
     //A pointer do the object (SmolOwner in C++) that owns the data on the slice
@@ -55,7 +54,6 @@ pub struct Packet {
 
 impl<'a> Drop for Blob {
     fn drop(&mut self) {
-        //println!("blob drop!");
         let f = self.pointer_to_destructor;
         let r = unsafe { f(self.pointer_to_owner) };
         //println!("blob drop result: {}", r);
@@ -92,10 +90,8 @@ impl<'a> SmolSocket {
         self.to_send.lock().unwrap().push_back(packet);
         0
     }
-
-    /*
-        TODO: figure out a better way than copying. Inneficient receive
-    */
+    
+    //TODO: figure out a better way than copying. Inneficient receive
     pub fn receive(
         &mut self,
         cbuffer: *mut CBuffer,
@@ -111,8 +107,6 @@ impl<'a> SmolSocket {
             Some(s) => {
                 let p: *mut u8 = allocate_function(s.len());
                 unsafe { ptr::copy(s.as_ptr(), p, s.len()) };
-                //let ss = s.
-                //this is wrong, fix it
                 unsafe {
                     *cbuffer = CBuffer {
                         data: p,
@@ -161,7 +155,6 @@ where
     //For TunInterface only. Couldn't think of a way to
     //create a specialized SmolStack for this case only
     packets_from_inside: Option<Arc<Mutex<VecDeque<Vec<u8>>>>>,
-    //Since the socket is gonna use the Blob, it's lifetime is the lifetime of the socket
     packets_from_outside: Option<Arc<Mutex<VecDeque<Blob>>>>,
 }
 
