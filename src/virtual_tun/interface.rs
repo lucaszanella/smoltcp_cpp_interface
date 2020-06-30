@@ -5,6 +5,7 @@ use super::smol_stack::{Blob, Packet, SmolStack, SocketType};
 use super::virtual_tun::VirtualTunInterface as VirtualTunDevice;
 use smoltcp::phy::wait as phy_wait;
 use smoltcp::phy::TunInterface as TunDevice;
+use smoltcp::phy::TapInterface as TapDevice;
 use smoltcp::phy::TunInterface;
 use smoltcp::socket::{SocketHandle, TcpSocket};
 use smoltcp::time::Instant;
@@ -39,6 +40,8 @@ pub struct CBuffer {
 pub enum SmolStackType<'a, 'b: 'a, 'c: 'a + 'b> {
     VirtualTun(SmolStack<'a, 'b, 'c, VirtualTunDevice>),
     Tun(SmolStack<'a, 'b, 'c, TunDevice>),
+    Tap(SmolStack<'a, 'b, 'c, TapDevice>),
+
 }
 
 //TODO: erase when confirmed its working
@@ -81,6 +84,7 @@ impl<'a, 'b: 'a, 'c: 'a + 'b> SmolStackType<'a, 'b, 'c> {
                 smol_stack.new_socket_handle_key()
             }
             &mut SmolStackType::Tun(ref mut smol_stack) => smol_stack.new_socket_handle_key(),
+            &mut SmolStackType::Tap(ref mut smol_stack) => smol_stack.new_socket_handle_key(),
         }
     }
 
@@ -90,6 +94,9 @@ impl<'a, 'b: 'a, 'c: 'a + 'b> SmolStackType<'a, 'b, 'c> {
                 smol_stack.add_socket(socket_type, socket_handle)
             }
             &mut SmolStackType::Tun(ref mut smol_stack) => {
+                smol_stack.add_socket(socket_type, socket_handle)
+            }
+            &mut SmolStackType::Tap(ref mut smol_stack) => {
                 smol_stack.add_socket(socket_type, socket_handle)
             }
         }
@@ -109,6 +116,9 @@ impl<'a, 'b: 'a, 'c: 'a + 'b> SmolStackType<'a, 'b, 'c> {
             &mut SmolStackType::Tun(ref mut smol_stack) => {
                 smol_stack.tcp_connect_ipv4(socket_handle_key, address, src_port, dst_port)
             }
+            &mut SmolStackType::Tap(ref mut smol_stack) => {
+                smol_stack.tcp_connect_ipv4(socket_handle_key, address, src_port, dst_port)
+            }
         }
     }
 
@@ -118,6 +128,9 @@ impl<'a, 'b: 'a, 'c: 'a + 'b> SmolStackType<'a, 'b, 'c> {
                 smol_stack.get_smol_socket(socket_handle_key)
             }
             &mut SmolStackType::Tun(ref mut smol_stack) => {
+                smol_stack.get_smol_socket(socket_handle_key)
+            }
+            &mut SmolStackType::Tap(ref mut smol_stack) => {
                 smol_stack.get_smol_socket(socket_handle_key)
             }
         }
@@ -137,6 +150,9 @@ impl<'a, 'b: 'a, 'c: 'a + 'b> SmolStackType<'a, 'b, 'c> {
             &mut SmolStackType::Tun(ref mut smol_stack) => {
                 smol_stack.tcp_connect_ipv6(socket_handle_key, address, src_port, dst_port)
             }
+            &mut SmolStackType::Tap(ref mut smol_stack) => {
+                smol_stack.tcp_connect_ipv6(socket_handle_key, address, src_port, dst_port)
+            }
         }
     }
 
@@ -144,6 +160,7 @@ impl<'a, 'b: 'a, 'c: 'a + 'b> SmolStackType<'a, 'b, 'c> {
         match self {
             &mut SmolStackType::VirtualTun(ref mut smol_stack) => smol_stack.add_ipv4_address(cidr),
             &mut SmolStackType::Tun(ref mut smol_stack) => smol_stack.add_ipv4_address(cidr),
+            &mut SmolStackType::Tap(ref mut smol_stack) => smol_stack.add_ipv4_address(cidr),
         }
     }
 
@@ -151,6 +168,7 @@ impl<'a, 'b: 'a, 'c: 'a + 'b> SmolStackType<'a, 'b, 'c> {
         match self {
             &mut SmolStackType::VirtualTun(ref mut smol_stack) => smol_stack.add_ipv6_address(cidr),
             &mut SmolStackType::Tun(ref mut smol_stack) => smol_stack.add_ipv6_address(cidr),
+            &mut SmolStackType::Tap(ref mut smol_stack) => smol_stack.add_ipv6_address(cidr),
         }
     }
 
@@ -160,6 +178,9 @@ impl<'a, 'b: 'a, 'c: 'a + 'b> SmolStackType<'a, 'b, 'c> {
                 smol_stack.add_default_v4_gateway(address)
             }
             &mut SmolStackType::Tun(ref mut smol_stack) => {
+                smol_stack.add_default_v4_gateway(address)
+            }
+            &mut SmolStackType::Tap(ref mut smol_stack) => {
                 smol_stack.add_default_v4_gateway(address)
             }
         }
@@ -173,6 +194,9 @@ impl<'a, 'b: 'a, 'c: 'a + 'b> SmolStackType<'a, 'b, 'c> {
             &mut SmolStackType::Tun(ref mut smol_stack) => {
                 smol_stack.add_default_v6_gateway(address)
             }
+            &mut SmolStackType::Tap(ref mut smol_stack) => {
+                smol_stack.add_default_v6_gateway(address)
+            }
         }
     }
 
@@ -180,6 +204,7 @@ impl<'a, 'b: 'a, 'c: 'a + 'b> SmolStackType<'a, 'b, 'c> {
         match self {
             &mut SmolStackType::VirtualTun(ref mut smol_stack) => smol_stack.finalize(),
             &mut SmolStackType::Tun(ref mut smol_stack) => smol_stack.finalize(),
+            &mut SmolStackType::Tap(ref mut smol_stack) => smol_stack.finalize(),
         }
     }
 
@@ -187,6 +212,7 @@ impl<'a, 'b: 'a, 'c: 'a + 'b> SmolStackType<'a, 'b, 'c> {
         match self {
             &mut SmolStackType::VirtualTun(ref mut smol_stack) => smol_stack.poll(),
             &mut SmolStackType::Tun(ref mut smol_stack) => smol_stack.poll(),
+            &mut SmolStackType::Tap(ref mut smol_stack) => smol_stack.poll(),
         }
     }
 
@@ -194,6 +220,7 @@ impl<'a, 'b: 'a, 'c: 'a + 'b> SmolStackType<'a, 'b, 'c> {
         match self {
             &mut SmolStackType::VirtualTun(ref mut smol_stack) => smol_stack.spin(socket_handle),
             &mut SmolStackType::Tun(ref mut smol_stack) => smol_stack.spin(socket_handle),
+            &mut SmolStackType::Tap(ref mut smol_stack) => smol_stack.spin(socket_handle),
         }
     }
 
@@ -203,6 +230,15 @@ impl<'a, 'b: 'a, 'c: 'a + 'b> SmolStackType<'a, 'b, 'c> {
                 //phy_wait(smol_stack.device.unwrap().as_raw_fd(), smol_stack.interface.unwrap().poll_delay(&smol_stack.sockets, timestamp)).expect("wait error")
             }
             &mut SmolStackType::Tun(ref mut smol_stack) => phy_wait(
+                smol_stack.fd.unwrap(),
+                smol_stack
+                    .interface
+                    .as_mut()
+                    .unwrap()
+                    .poll_delay(&smol_stack.sockets, Instant::from_millis(timestamp)),
+            )
+            .expect("wait error"),
+            &mut SmolStackType::Tap(ref mut smol_stack) => phy_wait(
                 smol_stack.fd.unwrap(),
                 smol_stack
                     .interface
