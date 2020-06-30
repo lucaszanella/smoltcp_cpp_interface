@@ -427,28 +427,17 @@ where
                 0
             }
             SocketType::UDP => {
-                let mut socket = self.sockets.get::<UdpSocket>(smol_socket.socket_handle);
-                let packet = smol_socket.get_latest_packet().unwrap();
-                //TODO: send correct slice
-                let bytes_sent =
-                    socket.send_slice(packet.blob.data.as_slice(), packet.endpoint.unwrap());
-                match bytes_sent {
-                    Ok(_) => 0,
-                    Err(e) => 1,
-                }
+                panic!("not implemented yet")
             }
             //TODO
-            SocketType::ICMP => 0,
-            SocketType::RAW_IPV4 => 0,
-            SocketType::RAW_IPV6 => 0,
+            SocketType::ICMP => panic!("not implemented yet"),
+            SocketType::RAW_IPV4 => panic!("not implemented yet"),
+            SocketType::RAW_IPV6 => panic!("not implemented yet"),
         }
     }
 
-    pub fn send(&mut self, packet: Packet) -> u8 {
-        if !packet.endpoint.is_none() {
-            //panic?
-        }
-        //self.to_send.lock().unwrap().push_back(packet);
+    pub fn send(&mut self, blob: Blob) -> u8 {
+        self.packets_from_outside.as_ref().unwrap().lock().unwrap().push_back(blob);
         0
     }
 
@@ -474,10 +463,12 @@ where
         }
         match s {
             Some(s) => {
+                //Allocates a raw pointer on C++ side
                 let p: *mut u8 = allocate_function(s.len());
+                //Fills the pointer
                 unsafe { ptr::copy(s.as_ptr(), p, s.len()) };
-                //let ss = s.
-                //this is wrong, fix it
+                //Sends the pointer back to C++, which has the responsibility
+                //to delete it 
                 unsafe {
                     *cbuffer = CBuffer {
                         data: p,
@@ -489,20 +480,4 @@ where
             None => 1,
         }
     }
-    /*
-    pub fn get_latest_packet(&mut self) -> Option<Packet> {
-        //If the last step couldn't send the entire blob,
-        //the packet is in `self.current_to_send`, so we return it again
-        //otherwise we return a fresh packet from the queue
-        match self.pack.take() {
-            Some(packet) => Some(packet),
-            //TODO: verify assertion below
-            //lock happens very birefly, so the list is not kept locked much time
-            None => {
-                let packet = self.to_send.lock().unwrap().pop_front();
-                packet
-            }
-        }
-    }
-    */
 }
