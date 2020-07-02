@@ -6,6 +6,7 @@
 #include <queue>
 #include <chrono>
 #include <iostream>
+#include <memory>
 
 typedef void *SmolStackPtr;
 typedef size_t SocketHandle;
@@ -17,6 +18,7 @@ namespace smoltcp
 {
     using namespace std::chrono;
 
+    //It does NOT own the data
     struct CBuffer
     {
         uint8_t *data;
@@ -26,15 +28,19 @@ namespace smoltcp
     struct Buffer
     {
     public:
-        Buffer(CBuffer cBuffer) : cBuffer(cBuffer) {}
-        Buffer(CBuffer cBuffer, bool empty) : cBuffer(cBuffer) { this->empty = empty; }
-        bool empty = false;
-        CBuffer cBuffer;
-        ~Buffer()
+        std::unique_ptr<uint8_t *> data;
+        size_t len = 0;
+        Buffer(CBuffer cBuffer)
         {
-            //std::cout << "buffer deleted" << std::endl;
-            delete[] cBuffer.data;
+            data = std::make_unique<uint8_t *>(cBuffer.data);
+            len = cBuffer.len;
         }
+        Buffer(bool empty)
+        {
+            data = std::make_unique<uint8_t*>(nullptr);
+            this->len = 0;
+        }
+        bool empty = false;
     };
 
     extern "C" uint8_t *cpp_allocate_buffer(size_t size)
@@ -259,13 +265,13 @@ namespace smoltcp
             uint8_t r = smol_stack_smol_socket_receive(smolStackPtr, smolSocket.handle, &cbuffer, &cpp_allocate_buffer);
             if (r == 0)
             {
-
-                Buffer buffer(cbuffer);
+                auto buffer = Buffer(cbuffer);
                 return buffer;
             }
             else
             {
-                return Buffer{CBuffer{}, true};
+                auto buffer = Buffer(true);
+                return buffer;
             }
         }
 
@@ -304,11 +310,13 @@ namespace smoltcp
             smol_stack_add_default_v6_gateway(smolStackPtr, address);
         }
 
-        void phy_wait(int64_t timestamp) {
+        void phy_wait(int64_t timestamp)
+        {
             smol_stack_phy_wait(smolStackPtr, timestamp);
         }
 
-        int64_t currentTimeMillis() {
+        int64_t currentTimeMillis()
+        {
             return Instant::now().count();
         }
 

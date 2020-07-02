@@ -3,6 +3,7 @@
 #include <map>
 #include <thread>
 #include <chrono>
+#include "utils.h"
 /*
     Destructor for us to pass to smol socket send function
     Is destructs SmolOwner functions
@@ -81,12 +82,10 @@ int main()
             }
             if (state == State::Response)
             {
-                Buffer buffer = tunSmolStack.receive(smolSocket);
+                auto buffer = tunSmolStack.receive(smolSocket);
                 if (!buffer.empty)
                 {
-                    //std::cout << std::string(buffer.cBuffer.data, buffer.cBuffer.len) << std::endl;
-                    fwrite(buffer.cBuffer.data, 1, buffer.cBuffer.len, stdout);
-                    //std::cout << "received " << buffer.cBuffer.len << " bytes" << std::endl; 
+                    printBuffer(*buffer.data.get(), buffer.len);
                 }
                 else
                 {

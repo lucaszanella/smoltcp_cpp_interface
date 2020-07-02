@@ -401,7 +401,10 @@ pub extern "C" fn smol_stack_smol_socket_send(
     pointer_to_destructor: unsafe extern "C" fn(*const c_void) -> u8,
 ) -> u8 {
     let smol_socket = smol_stack.get_smol_socket(socket_handle_key);
-    let packet_as_vector = unsafe { Vec::from_raw_parts(data, len, len) };
+    //let packet_as_vector = unsafe { Vec::from_raw_parts(data, len, len) };
+    let mut packet_as_vector = Vec::new();
+    let slice = unsafe{slice::from_raw_parts(data, len)};
+    packet_as_vector.extend_from_slice(slice);
     let packet = Packet {
         blob: Blob {
             data: packet_as_vector,
