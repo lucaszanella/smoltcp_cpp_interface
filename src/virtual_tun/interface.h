@@ -122,7 +122,8 @@ namespace smoltcp
     extern "C" void smol_stack_add_default_v6_gateway(SmolStackPtr, CIpv6Address);
     extern "C" uint8_t smol_stack_finalize(SmolStackPtr);
     extern "C" uint8_t smol_stack_virtual_tun_send(SmolStackPtr, const uint8_t *data, size_t len);
-    extern "C" uint8_t smol_stack_virtual_tun_receive(SmolStackPtr, CBuffer *cbuffer, uint8_t *(*)(size_t));
+    extern "C" uint8_t smol_stack_virtual_tun_receive_wait(SmolStackPtr, CBuffer *cbuffer, uint8_t *(*)(size_t));
+    extern "C" uint8_t smol_stack_virtual_tun_receive_instantly(SmolStackPtr, CBuffer *cbuffer, uint8_t *(*)(size_t));
     extern "C" void smol_stack_destroy(void *);
 
     enum StackType
@@ -339,11 +340,28 @@ namespace smoltcp
             smol_stack_virtual_tun_send(smolStackPtr, smolSocket.handle, data, len);
         }
 
-        Buffer virtualTunReceive(SmolSocket smolSocket)
+        Buffer virtualTunReceiveWait(SmolSocket smolSocket)
         {
             CBuffer cbuffer;
 
-            uint8_t r = smol_stack_virtual_tun_receive(smolStackPtr, &cbuffer, &cpp_allocate_buffer);
+            uint8_t r = smol_stack_virtual_tun_receive_wait(smolStackPtr, &cbuffer, &cpp_allocate_buffer);
+            if (r == 0)
+            {
+                auto buffer = Buffer(cbuffer);
+                return buffer;
+            }
+            else
+            {
+                auto buffer = Buffer(true);
+                return buffer;
+            }
+        }
+
+        Buffer virtualTunReceiveInstantly(SmolSocket smolSocket)
+        {
+            CBuffer cbuffer;
+
+            uint8_t r = smol_stack_virtual_tun_receive_instantly(smolStackPtr, &cbuffer, &cpp_allocate_buffer);
             if (r == 0)
             {
                 auto buffer = Buffer(cbuffer);

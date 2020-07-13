@@ -442,7 +442,44 @@ where
     */
     //Receive a packet from the stack (Ethernet/IP)
     //not to confuse with TCP/UDP/etc packets
-    pub fn receive(
+    //TODO: Rename to receive_wait()? 
+    pub fn receive_wait(
+        &mut self,
+        cbuffer: *mut CBuffer,
+        allocate_function: extern "C" fn(size: usize) -> *mut u8,
+    ) -> u8 {
+        let s;
+        let (packets_from_inside, condvar) = &*self.packets_from_inside.as_ref().unwrap().clone();
+        {
+            //TODO: condvar.wait
+            //Create a scope so we hold the queue for the least ammount needed
+            //TODO: do I really need to create a scope?
+            s = packets_from_inside
+                .lock()
+                .unwrap()
+                .pop_front()
+        }
+        match s {
+            Some(s) => {
+                //Allocates a raw pointer on C++ side
+                let p: *mut u8 = allocate_function(s.len());
+                //Fills the pointer
+                unsafe { ptr::copy(s.as_ptr(), p, s.len()) };
+                //Sends the pointer back to C++, which has the responsibility
+                //to delete it
+                unsafe {
+                    *cbuffer = CBuffer {
+                        data: p,
+                        len: s.len(),
+                    };
+                }
+                0
+            }
+            None => 1,
+        }
+    }
+
+    pub fn receive_instantly(
         &mut self,
         cbuffer: *mut CBuffer,
         allocate_function: extern "C" fn(size: usize) -> *mut u8,

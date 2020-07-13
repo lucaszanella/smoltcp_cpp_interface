@@ -248,13 +248,26 @@ impl<'a, 'b: 'a, 'c: 'a + 'b> SmolStackType<'a, 'b, 'c> {
         }
     }
 
-    pub fn receive(
+    pub fn receive_wait(
         &mut self,
         cbuffer: *mut CBuffer,
         allocate_function: extern "C" fn(size: usize) -> *mut u8,
     ) -> u8 {
         match self {
-            &mut SmolStackType::VirtualTun(ref mut smol_stack) => smol_stack.receive(cbuffer, allocate_function),
+            &mut SmolStackType::VirtualTun(ref mut smol_stack) => smol_stack.receive_wait(cbuffer, allocate_function),
+            _ => panic!("receive is only for VirtualTun")
+            //&mut SmolStackType::Tun(ref mut smol_stack) => smol_stack.receive(cbuffer, allocate_function),
+            //&mut SmolStackType::Tap(ref mut smol_stack) => smol_stack.receive(cbuffer, allocate_function),
+        }
+    }
+
+    pub fn receive_instantly(
+        &mut self,
+        cbuffer: *mut CBuffer,
+        allocate_function: extern "C" fn(size: usize) -> *mut u8,
+    ) -> u8 {
+        match self {
+            &mut SmolStackType::VirtualTun(ref mut smol_stack) => smol_stack.receive_instantly(cbuffer, allocate_function),
             _ => panic!("receive is only for VirtualTun")
             //&mut SmolStackType::Tun(ref mut smol_stack) => smol_stack.receive(cbuffer, allocate_function),
             //&mut SmolStackType::Tap(ref mut smol_stack) => smol_stack.receive(cbuffer, allocate_function),
@@ -577,12 +590,21 @@ pub extern "C" fn smol_stack_finalize<'a, 'b: 'a, 'c: 'a + 'b>(
 pub extern "C" fn smol_stack_destroy(_: Option<Box<SmolStackType>>) {}
 
 #[no_mangle]
-pub extern "C" fn smol_stack_virtual_tun_receive(
+pub extern "C" fn smol_stack_virtual_tun_receive_wait(
     smol_stack: &mut SmolStackType,
     cbuffer: *mut CBuffer,
     allocate_function: extern "C" fn(size: usize) -> *mut u8,
 ) -> u8 {
-    smol_stack.receive(cbuffer, allocate_function)
+    smol_stack.receive_wait(cbuffer, allocate_function)
+}
+
+#[no_mangle]
+pub extern "C" fn smol_stack_virtual_tun_receive_instantly(
+    smol_stack: &mut SmolStackType,
+    cbuffer: *mut CBuffer,
+    allocate_function: extern "C" fn(size: usize) -> *mut u8,
+) -> u8 {
+    smol_stack.receive_instantly(cbuffer, allocate_function)
 }
 
 #[no_mangle]
