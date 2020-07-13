@@ -4,8 +4,8 @@ use super::smol_stack::SmolSocket;
 use super::smol_stack::{Blob, Packet, SmolStack, SocketType};
 use super::virtual_tun::VirtualTunInterface as VirtualTunDevice;
 use smoltcp::phy::wait as phy_wait;
-use smoltcp::phy::TunInterface as TunDevice;
 use smoltcp::phy::TapInterface as TapDevice;
+use smoltcp::phy::TunInterface as TunDevice;
 use smoltcp::phy::TunInterface;
 use smoltcp::socket::{SocketHandle, TcpSocket};
 use smoltcp::time::Instant;
@@ -16,13 +16,12 @@ use std::os::raw::{c_char, c_int};
 use std::os::unix::io::AsRawFd;
 use std::slice;
 use std::str::{self};
-use std::sync::{Arc, Mutex, Condvar};
+use std::sync::{Arc, Condvar, Mutex};
 
 pub enum SmolSocketType {
     VirtualTun,
     Tun,
 }
-
 
 #[repr(C)]
 pub struct CBuffer {
@@ -41,7 +40,6 @@ pub enum SmolStackType<'a, 'b: 'a, 'c: 'a + 'b> {
     VirtualTun(SmolStack<'a, 'b, 'c, VirtualTunDevice>),
     Tun(SmolStack<'a, 'b, 'c, TunDevice>),
     Tap(SmolStack<'a, 'b, 'c, TapDevice>),
-
 }
 
 //TODO: erase when confirmed its working
@@ -249,6 +247,28 @@ impl<'a, 'b: 'a, 'c: 'a + 'b> SmolStackType<'a, 'b, 'c> {
             .expect("wait error"),
         }
     }
+
+    pub fn receive(
+        &mut self,
+        cbuffer: *mut CBuffer,
+        allocate_function: extern "C" fn(size: usize) -> *mut u8,
+    ) -> u8 {
+        match self {
+            &mut SmolStackType::VirtualTun(ref mut smol_stack) => smol_stack.receive(cbuffer, allocate_function),
+            _ => panic!("receive is only for VirtualTun")
+            //&mut SmolStackType::Tun(ref mut smol_stack) => smol_stack.receive(cbuffer, allocate_function),
+            //&mut SmolStackType::Tap(ref mut smol_stack) => smol_stack.receive(cbuffer, allocate_function),
+        }
+    }
+
+    pub fn send(&mut self, blob: Blob) -> u8 {
+        match self {
+            &mut SmolStackType::VirtualTun(ref mut smol_stack) => smol_stack.send(blob),
+            _ => panic!("receive is only for VirtualTun")
+            //&mut SmolStackType::Tun(ref mut smol_stack) => smol_stack.receive(cbuffer, allocate_function),
+            //&mut SmolStackType::Tap(ref mut smol_stack) => smol_stack.receive(cbuffer, allocate_function),
+        }
+    }
 }
 
 #[repr(C)]
@@ -403,14 +423,47 @@ pub extern "C" fn smol_stack_smol_socket_send(
     let smol_socket = smol_stack.get_smol_socket(socket_handle_key);
     //let packet_as_vector = unsafe { Vec::from_raw_parts(data, len, len) };
     let mut packet_as_vector = Vec::new();
-    let slice = unsafe{slice::from_raw_parts(data, len)};
+    let slice = unsafe { slice::from_raw_parts(data, len) };
     packet_as_vector.extend_from_slice(slice);
     let packet = Packet {
         blob: Blob {
             data: packet_as_vector,
             start: 0,
-            pointer_to_owner: pointer_to_owner,
-            pointer_to_destructor: pointer_to_destructor,
+            pointer_to_owner: Some(pointer_to_owner),
+            pointer_to_destructor: Some(pointer_to_destructor),
+        },
+        endpoint: Into::<Option<IpEndpoint>>::into(endpoint),
+    };
+    match smol_socket {
+        Some(smol_socket) => {
+            smol_socket.send(packet);
+            0
+        }
+        None => 1,
+    }
+}
+
+/*
+    Copies data instead of owning object that destructs things
+*/
+#[no_mangle]
+pub extern "C" fn smol_stack_smol_socket_send_copy(
+    smol_stack: &mut SmolStackType,
+    socket_handle_key: usize,
+    data: *mut u8,
+    len: usize,
+    endpoint: CIpEndpoint,
+) -> u8 {
+    let smol_socket = smol_stack.get_smol_socket(socket_handle_key);
+    let mut packet_as_vector = Vec::new();
+    let slice = unsafe { slice::from_raw_parts(data, len) };
+    packet_as_vector.extend_from_slice(slice);
+    let packet = Packet {
+        blob: Blob {
+            data: packet_as_vector,
+            start: 0,
+            pointer_to_owner: None,
+            pointer_to_destructor: None,
         },
         endpoint: Into::<Option<IpEndpoint>>::into(endpoint),
     };
@@ -522,3 +575,19 @@ pub extern "C" fn smol_stack_finalize<'a, 'b: 'a, 'c: 'a + 'b>(
 
 #[no_mangle]
 pub extern "C" fn smol_stack_destroy(_: Option<Box<SmolStackType>>) {}
+
+#[no_mangle]
+pub extern "C" fn smol_stack_virtual_tun_receive(
+    smol_stack: &mut SmolStackType,
+    cbuffer: *mut CBuffer,
+    allocate_function: extern "C" fn(size: usize) -> *mut u8,
+) -> u8 {
+    smol_stack.receive(cbuffer, allocate_function)
+}
+
+#[no_mangle]
+pub extern "C" fn smol_stack_virtual_tun_send(
+    smol_stack: &mut SmolStackType, 
+    blob: Blob) -> u8 {
+    smol_stack.send(blob)
+}

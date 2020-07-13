@@ -114,12 +114,15 @@ namespace smoltcp
     extern "C" void smol_stack_tcp_connect_ipv4(SmolStackPtr, SocketHandle socketHandle, CIpv4Address, uint8_t src_port, uint8_t dst_port);
     extern "C" void smol_stack_tcp_connect_ipv6(SmolStackPtr, SocketHandle socketHandle, CIpv6Address, uint8_t src_port, uint8_t dst_port);
     extern "C" uint8_t smol_stack_smol_socket_send(SmolStackPtr, SocketHandle socketHandle, const uint8_t *data, size_t len, CIpEndpoint endpoint, void *, uint8_t (*)(void *));
+    extern "C" uint8_t smol_stack_smol_socket_send_copy(SmolStackPtr, SocketHandle socketHandle, const uint8_t *data, size_t len, CIpEndpoint endpoint);
     extern "C" uint8_t smol_stack_smol_socket_receive(SmolStackPtr, SocketHandle socketHandle, CBuffer *cbuffer, uint8_t *(*)(size_t));
     extern "C" void smol_stack_add_ipv4_address(SmolStackPtr, CIpv4Cidr);
     extern "C" void smol_stack_add_ipv6_address(SmolStackPtr, CIpv6Cidr);
     extern "C" void smol_stack_add_default_v4_gateway(SmolStackPtr, CIpv4Address);
     extern "C" void smol_stack_add_default_v6_gateway(SmolStackPtr, CIpv6Address);
     extern "C" uint8_t smol_stack_finalize(SmolStackPtr);
+    extern "C" uint8_t smol_stack_virtual_tun_send(SmolStackPtr, const uint8_t *data, size_t len);
+    extern "C" uint8_t smol_stack_virtual_tun_receive(SmolStackPtr, CBuffer *cbuffer, uint8_t *(*)(size_t));
     extern "C" void smol_stack_destroy(void *);
 
     enum StackType
@@ -258,6 +261,11 @@ namespace smoltcp
             smol_stack_smol_socket_send(smolStackPtr, smolSocket.handle, data, len, endpoint, static_cast<void *>(pointerToSmolOwner), smolOwnerDestructor);
         }
 
+        void send_copy(SmolSocket smolSocket, const uint8_t *data, size_t len, CIpEndpoint endpoint)
+        {
+            smol_stack_smol_socket_send_copy(smolStackPtr, smolSocket.handle, data, len, endpoint);
+        }
+
         Buffer receive(SmolSocket smolSocket)
         {
             CBuffer cbuffer;
@@ -323,6 +331,29 @@ namespace smoltcp
         uint8_t finalize()
         {
             return smol_stack_finalize(smolStackPtr);
+        }
+
+        template <typename T>
+        void virtualTunSend(SmolSocket smolSocket, const uint8_t *data, size_t len)
+        {
+            smol_stack_virtual_tun_send(smolStackPtr, smolSocket.handle, data, len);
+        }
+
+        Buffer virtualTunReceive(SmolSocket smolSocket)
+        {
+            CBuffer cbuffer;
+
+            uint8_t r = smol_stack_virtual_tun_receive(smolStackPtr, &cbuffer, &cpp_allocate_buffer);
+            if (r == 0)
+            {
+                auto buffer = Buffer(cbuffer);
+                return buffer;
+            }
+            else
+            {
+                auto buffer = Buffer(true);
+                return buffer;
+            }
         }
 
         ~TunSmolStack()

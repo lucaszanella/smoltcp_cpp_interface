@@ -38,13 +38,13 @@ pub struct Blob {
     pub data: Vec<u8>,
     pub start: usize,
     //A pointer do the object (SmolOwner in C++) that owns the data on the slice
-    pub pointer_to_owner: *const c_void,
+    pub pointer_to_owner: Option<*const c_void>,
     /*
         Function pointer to the function that receives the pointer_to_owner
         and deletes it, thus callings its destructor which deletes the owner
         of the data on the slice, which deletes the data on the slice
     */
-    pub pointer_to_destructor: unsafe extern "C" fn(*const c_void) -> u8,
+    pub pointer_to_destructor: Option<unsafe extern "C" fn(*const c_void) -> u8>,
 }
 
 pub struct Packet {
@@ -55,7 +55,10 @@ pub struct Packet {
 impl<'a> Drop for Blob {
     fn drop(&mut self) {
         let f = self.pointer_to_destructor;
-        let r = unsafe { f(self.pointer_to_owner) };
+        match self.pointer_to_destructor {
+            Some(f) => {unsafe { f(self.pointer_to_owner.unwrap()) };},
+            None => {}
+        }
         //println!("blob drop result: {}", r);
     }
 }

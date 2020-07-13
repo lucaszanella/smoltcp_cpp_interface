@@ -54,9 +54,8 @@ impl<'a> VirtualTunInterface {
                 Ok(packet.data.len())
             }
             /*
-                Simply return 1. Device::receive(&mut self) is prepared
-                to assume that it'd block so it does nothing in this case
-                (returns None)
+                Simply returns ERR_WOULD_BLOCK. Device::receive(&mut self) is prepared
+                to assume that it'd block so it does nothing in this case (returns None)
             */
             None => Err(ERR_WOULD_BLOCK),
         }
