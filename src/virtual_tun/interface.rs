@@ -51,13 +51,14 @@ impl<'a, 'b: 'a, 'c: 'a + 'b> Drop for SmolStackType<'a, 'b, 'c> {
 
 impl<'a, 'b: 'a, 'c: 'a + 'b> SmolStackType<'a, 'b, 'c> {
     pub fn new_virtual_tun(interface_name: String) -> Box<SmolStackType<'a, 'b, 'c>> {
-        let packets_from_inside = Arc::new((Mutex::new(VecDeque::new()), Condvar::new()));
-        let packets_from_outside = Arc::new((Mutex::new(VecDeque::new()), Condvar::new()));
-
+        let packets_from_inside = Arc::new(Mutex::new(VecDeque::new()));
+        let packets_from_outside = Arc::new(Mutex::new(VecDeque::new()));
+        let has_data = Arc::new((Mutex::new(()), Condvar::new()));
         let device = VirtualTunDevice::new(
             interface_name.as_str(),
             packets_from_inside.clone(),
             packets_from_outside.clone(),
+            has_data.clone(),
         )
         .unwrap();
         let smol_stack = SmolStack::new(
@@ -65,6 +66,8 @@ impl<'a, 'b: 'a, 'c: 'a + 'b> SmolStackType<'a, 'b, 'c> {
             None,
             Some(packets_from_inside.clone()),
             Some(packets_from_outside.clone()),
+            Some(has_data.clone()),
+
         );
         Box::new(SmolStackType::VirtualTun(smol_stack))
     }
@@ -72,7 +75,7 @@ impl<'a, 'b: 'a, 'c: 'a + 'b> SmolStackType<'a, 'b, 'c> {
     pub fn new_tun(interface_name: String) -> Box<SmolStackType<'a, 'b, 'c>> {
         let device = TunDevice::new(interface_name.as_str()).unwrap();
         let fd = Some(device.as_raw_fd());
-        let smol_stack = SmolStack::new(device, fd, None, None);
+        let smol_stack = SmolStack::new(device, fd, None, None, None);
         Box::new(SmolStackType::Tun(smol_stack))
     }
 

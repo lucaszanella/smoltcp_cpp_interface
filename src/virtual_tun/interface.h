@@ -37,7 +37,7 @@ namespace smoltcp
         }
         Buffer(bool empty)
         {
-            data = std::make_unique<uint8_t*>(nullptr);
+            data = std::make_unique<uint8_t *>(nullptr);
             this->len = 0;
         }
         bool empty = false;
@@ -335,12 +335,12 @@ namespace smoltcp
         }
 
         template <typename T>
-        void virtualTunSend(SmolSocket smolSocket, const uint8_t *data, size_t len)
+        void virtualTunSend(const uint8_t *data, size_t len)
         {
             smol_stack_virtual_tun_send(smolStackPtr, smolSocket.handle, data, len);
         }
 
-        Buffer virtualTunReceiveWait(SmolSocket smolSocket)
+        Buffer virtualTunReceiveWait()
         {
             CBuffer cbuffer;
 
@@ -373,6 +373,30 @@ namespace smoltcp
                 return buffer;
             }
         }
+
+        /*
+            Smoltcp's thread is responsible for calling the callback
+            back with the data once it's ready
+        */
+        /*
+        template<class ReadHandler>
+        Buffer virtualTunReceiveCallback(SmolSocket smolSocket, ReadHandler &&handler)
+        {
+            CBuffer cbuffer;
+
+            uint8_t r = smol_stack_virtual_tun_receive_callback(smolStackPtr, &cbuffer, &cpp_allocate_buffer);
+            if (r == 0)
+            {
+                auto buffer = Buffer(cbuffer);
+                return buffer;
+            }
+            else
+            {
+                auto buffer = Buffer(true);
+                return buffer;
+            }
+        }
+        */
 
         ~TunSmolStack()
         {

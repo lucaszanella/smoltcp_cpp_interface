@@ -1,17 +1,17 @@
 #![allow(unsafe_code)]
 #![allow(unused)]
 
-use std::cell::RefCell;
-use std::io;
-use std::rc::Rc;
-use std::vec::Vec;
 use super::smol_stack::Blob;
 use smoltcp::phy::{self, Device, DeviceCapabilities, Medium};
 use smoltcp::time::Instant;
 use smoltcp::{Error, Result};
+use std::cell::RefCell;
 use std::collections::VecDeque;
+use std::io;
+use std::rc::Rc;
 use std::sync::{Arc, Condvar, Mutex};
-
+use std::vec::Vec;
+use std::time::Duration;
 use std::isize;
 use std::ops::Deref;
 use std::slice;
@@ -22,19 +22,22 @@ static ERR_WOULD_BLOCK: u32 = 1;
 #[derive(Clone)]
 pub struct VirtualTunInterface {
     mtu: usize,
-    packets_from_inside: Arc<(Mutex<VecDeque<Vec<u8>>>, Condvar)>,
-    packets_from_outside: Arc<(Mutex<VecDeque<Blob>>, Condvar)>,
+    has_data: Arc<(Mutex<()>, Condvar)>,
+    packets_from_inside: Arc<Mutex<VecDeque<Vec<u8>>>>,
+    packets_from_outside: Arc<Mutex<VecDeque<Blob>>>,
 }
 
 impl<'a> VirtualTunInterface {
     pub fn new(
         _name: &str,
-        packets_from_inside: Arc<(Mutex<VecDeque<Vec<u8>>>, Condvar)>,
-        packets_from_outside: Arc<(Mutex<VecDeque<Blob>>, Condvar)>,
+        packets_from_inside: Arc<Mutex<VecDeque<Vec<u8>>>>,
+        packets_from_outside: Arc<Mutex<VecDeque<Blob>>>,
+        has_data: Arc<(Mutex<()>, Condvar)>
     ) -> Result<VirtualTunInterface> {
         let mtu = 1500; //??
         Ok(VirtualTunInterface {
             mtu: mtu,
+            has_data: has_data,
             packets_from_outside: packets_from_outside,
             packets_from_inside: packets_from_inside,
         })
@@ -42,7 +45,7 @@ impl<'a> VirtualTunInterface {
     //TODO: this cant block, I guess?? Or it can..
     fn recv(&mut self, buffer: &mut [u8]) -> core::result::Result<usize, u32> {
         //TODO: should I clone?
-        let (packets_from_outside, condvar) = &*self.packets_from_outside.clone();
+        let packets_from_outside = &*self.packets_from_outside.clone();
         let p;
         {
             p = packets_from_outside.lock().unwrap().pop_front();
@@ -50,7 +53,8 @@ impl<'a> VirtualTunInterface {
         match p {
             Some(packet) => {
                 buffer.copy_from_slice(packet.data.as_slice());
-                condvar.notify_one();
+                let (mutex, has_data_condition_variable) = &*self.has_data.clone();
+                has_data_condition_variable.notify_one();
                 Ok(packet.data.len())
             }
             /*
@@ -59,6 +63,25 @@ impl<'a> VirtualTunInterface {
             */
             None => Err(ERR_WOULD_BLOCK),
         }
+    }
+
+    /*
+        Waits until either data was sent or received, that is, 
+        either packets_from_outside or packets_from_inside
+        have changed
+    */
+    pub fn wait(&mut self) {
+        let packets_from_outside =
+            &*self.packets_from_outside.clone();
+        let (mutex, has_data_condition_variable) = &*self.has_data.clone();
+        has_data_condition_variable.wait(mutex.lock().unwrap());
+    }
+
+    pub fn wait_timeout(&mut self, duration: Duration) {
+        let packets_from_outside =
+            &*self.packets_from_outside.clone();
+        let (mutex, has_data_condition_variable) = &*self.has_data.clone();
+        has_data_condition_variable.wait_timeout(mutex.lock().unwrap(), duration);
     }
 }
 
@@ -77,7 +100,10 @@ impl<'d> Device<'d> for VirtualTunInterface {
         match self.recv(&mut buffer[..]) {
             Ok(size) => {
                 buffer.resize(size, 0);
-                let rx = RxToken { buffer };
+                let rx = RxToken {
+                    lower: Rc::new(RefCell::new(self.clone())),
+                    buffer,
+                };
                 let tx = TxToken {
                     lower: Rc::new(RefCell::new(self.clone())),
                 };
@@ -102,6 +128,7 @@ impl<'d> Device<'d> for VirtualTunInterface {
 
 #[doc(hidden)]
 pub struct RxToken {
+    lower: Rc<RefCell<VirtualTunInterface>>,
     buffer: Vec<u8>,
 }
 
@@ -110,7 +137,11 @@ impl phy::RxToken for RxToken {
     where
         F: FnOnce(&mut [u8]) -> Result<R>,
     {
-        f(&mut self.buffer[..])
+        let mut lower = self.lower.as_ref().borrow_mut();
+        let r = f(&mut self.buffer[..]);
+        let (mutex, has_data_condition_variable) = &*lower.has_data.clone();
+        has_data_condition_variable.notify_one();
+        r
     }
 }
 
@@ -127,13 +158,14 @@ impl<'a> phy::TxToken for TxToken {
         let mut lower = self.lower.as_ref().borrow_mut();
         let mut buffer = vec![0; len];
         let result = f(&mut buffer);
-        println!("should send NOW packet with size {}", len);
-        use std::borrow::BorrowMut;
-        let (packets_from_inside, condvar) = &*lower.packets_from_inside.clone();
+        
+        let packets_from_inside = &*lower.packets_from_inside.clone();
         {
             packets_from_inside.lock().unwrap().push_back(buffer);
         }
-        condvar.notify_one();
+        
+        let (mutex, has_data_condition_variable) = &*lower.has_data.clone();
+        has_data_condition_variable.notify_one();
         result
     }
 }

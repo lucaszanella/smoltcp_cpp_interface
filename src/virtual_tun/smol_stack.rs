@@ -56,7 +56,9 @@ impl<'a> Drop for Blob {
     fn drop(&mut self) {
         let f = self.pointer_to_destructor;
         match self.pointer_to_destructor {
-            Some(f) => {unsafe { f(self.pointer_to_owner.unwrap()) };},
+            Some(f) => {
+                unsafe { f(self.pointer_to_owner.unwrap()) };
+            }
             None => {}
         }
         //println!("blob drop result: {}", r);
@@ -156,8 +158,9 @@ where
     pub interface: Option<Interface<'a, 'b, 'c, DeviceT>>,
     //For TunInterface only. Couldn't think of a way to
     //create a specialized SmolStack for this case only
-    packets_from_inside: Option<Arc<(Mutex<VecDeque<Vec<u8>>>, Condvar)>>,
-    packets_from_outside: Option<Arc<(Mutex<VecDeque<Blob>>, Condvar)>>,
+    packets_from_inside: Option<Arc<Mutex<VecDeque<Vec<u8>>>>>,
+    packets_from_outside: Option<Arc<Mutex<VecDeque<Blob>>>>,
+    has_data: Option<Arc<(Mutex<()>, Condvar)>>,
 }
 
 impl<'a, 'b: 'a, 'c: 'a + 'b, DeviceT> SmolStack<'a, 'b, 'c, DeviceT>
@@ -167,8 +170,9 @@ where
     pub fn new(
         device: DeviceT,
         fd: Option<i32>,
-        packets_from_inside: Option<Arc<(Mutex<VecDeque<Vec<u8>>>, Condvar)>>,
-        packets_from_outside: Option<Arc<(Mutex<VecDeque<Blob>>, Condvar)>>,
+        packets_from_inside: Option<Arc<Mutex<VecDeque<Vec<u8>>>>>,
+        packets_from_outside: Option<Arc<Mutex<VecDeque<Blob>>>>,
+        has_data: Option<Arc<(Mutex<()>, Condvar)>>
     ) -> SmolStack<'a, 'b, 'c, DeviceT> {
         let socket_set = SocketSet::new(vec![]);
         let ip_addrs = std::vec::Vec::new();
@@ -185,6 +189,7 @@ where
             interface: None,
             packets_from_inside: packets_from_inside,
             packets_from_outside: packets_from_outside,
+            has_data: has_data,
         }
     }
 
@@ -432,7 +437,7 @@ where
     //Send a packet to the stack (Ethernet/IP)
     //not to confuse with TCP/UDP/etc packets
     pub fn send(&mut self, blob: Blob) -> u8 {
-        let (packets_from_outside, condvar) = &*self.packets_from_outside.as_ref().unwrap().clone();
+        let packets_from_outside = &*self.packets_from_outside.as_ref().unwrap().clone();
         packets_from_outside.lock().unwrap().push_back(blob);
         0
     }
@@ -442,22 +447,23 @@ where
     */
     //Receive a packet from the stack (Ethernet/IP)
     //not to confuse with TCP/UDP/etc packets
-    //TODO: Rename to receive_wait()? 
+    //TODO: Rename to receive_wait()?
     pub fn receive_wait(
         &mut self,
         cbuffer: *mut CBuffer,
         allocate_function: extern "C" fn(size: usize) -> *mut u8,
     ) -> u8 {
         let s;
-        let (packets_from_inside, condvar) = &*self.packets_from_inside.as_ref().unwrap().clone();
+        //let has_data = &*self.has_data.as_ref().unwrap().clone();
+        let packets_from_inside =
+            &*self.packets_from_inside.as_ref().unwrap().clone();
         {
-            //TODO: condvar.wait
             //Create a scope so we hold the queue for the least ammount needed
             //TODO: do I really need to create a scope?
-            s = packets_from_inside
-                .lock()
-                .unwrap()
-                .pop_front()
+
+            //TODO: handle Mutex poisoning error
+            //condition_variable.wait_while(packets_from_inside.lock().unwrap(), |p| p.len() > 0);
+            s = packets_from_inside.lock().unwrap().pop_front();
         }
         match s {
             Some(s) => {
@@ -473,26 +479,29 @@ where
                         len: s.len(),
                     };
                 }
+                //0 means everything went well
                 0
             }
             None => 1,
         }
     }
 
+    /*
+        Returns 0 in case of sucess
+        Returns 1 if there's no packet to receive
+    */
     pub fn receive_instantly(
         &mut self,
         cbuffer: *mut CBuffer,
         allocate_function: extern "C" fn(size: usize) -> *mut u8,
     ) -> u8 {
         let s;
-        let (packets_from_inside, condvar) = &*self.packets_from_inside.as_ref().unwrap().clone();
+        //We ignore the condvar because we want to return immediately
+        let packets_from_inside = &*self.packets_from_inside.as_ref().unwrap().clone();
         {
             //Create a scope so we hold the queue for the least ammount needed
             //TODO: do I really need to create a scope?
-            s = packets_from_inside
-                .lock()
-                .unwrap()
-                .pop_front()
+            s = packets_from_inside.lock().unwrap().pop_front()
         }
         match s {
             Some(s) => {
