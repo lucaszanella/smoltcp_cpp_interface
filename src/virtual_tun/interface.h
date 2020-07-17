@@ -336,10 +336,9 @@ namespace smoltcp
             return smol_stack_finalize(smolStackPtr);
         }
 
-        template <typename T>
         void virtualTunSend(const uint8_t *data, size_t len)
         {
-            smol_stack_virtual_tun_send(smolStackPtr, smolSocket.handle, data, len);
+            smol_stack_virtual_tun_send(smolStackPtr, data, len);
         }
 
         Buffer virtualTunReceiveWait()
@@ -359,7 +358,7 @@ namespace smoltcp
             }
         }
 
-        Buffer virtualTunReceiveInstantly(SmolSocket smolSocket)
+        Buffer virtualTunReceiveInstantly()
         {
             CBuffer cbuffer;
 
