@@ -107,6 +107,7 @@ namespace smoltcp
 
     extern "C" SmolStackPtr smol_stack_smol_stack_new_virtual_tun(const char *interfaceName);
     extern "C" SmolStackPtr smol_stack_smol_stack_new_tun(const char *interfaceName);
+    extern "C" SmolStackPtr smol_stack_smol_stack_new_tap(const char *interfaceName);    
     extern "C" uint8_t smol_stack_add_socket(SmolStackPtr, uint8_t socketType, SocketHandle socketHandle);
     extern "C" void smol_stack_poll(SmolStackPtr);
     extern "C" void smol_stack_phy_wait(SmolStackPtr, int64_t timestamp);
@@ -210,7 +211,8 @@ namespace smoltcp
             }
             else if (stackType == StackType::Tap)
             {
-                //throw error
+                std::cout << "creating TAP device" << std::endl;
+                smolStackPtr = smol_stack_smol_stack_new_tap(interfaceName.c_str());
             }
         }
 

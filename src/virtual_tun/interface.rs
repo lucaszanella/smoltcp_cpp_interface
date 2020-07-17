@@ -79,6 +79,13 @@ impl<'a, 'b: 'a, 'c: 'a + 'b> SmolStackType<'a, 'b, 'c> {
         Box::new(SmolStackType::Tun(smol_stack))
     }
 
+    pub fn new_tap(interface_name: String) -> Box<SmolStackType<'a, 'b, 'c>> {
+        let device = TapDevice::new(interface_name.as_str()).unwrap();
+        let fd = Some(device.as_raw_fd());
+        let smol_stack = SmolStack::new(device, fd, None, None, None);
+        Box::new(SmolStackType::Tap(smol_stack))
+    }
+
     pub fn new_socket_handle_key(&mut self) -> usize {
         match self {
             &mut SmolStackType::VirtualTun(ref mut smol_stack) => {
@@ -424,6 +431,16 @@ pub extern "C" fn smol_stack_smol_stack_new_tun<'a, 'b: 'a, 'c: 'a + 'b>(
     let interface_name_slice: &str = interface_name_c_str.to_str().unwrap();
     let s: String = interface_name_slice.to_owned();
     SmolStackType::new_tun(s)
+}
+
+#[no_mangle]
+pub extern "C" fn smol_stack_smol_stack_new_tap<'a, 'b: 'a, 'c: 'a + 'b>(
+    interface_name: *const c_char,
+) -> Box<SmolStackType<'a, 'b, 'c>> {
+    let interface_name_c_str: &CStr = unsafe { CStr::from_ptr(interface_name) };
+    let interface_name_slice: &str = interface_name_c_str.to_str().unwrap();
+    let s: String = interface_name_slice.to_owned();
+    SmolStackType::new_tap(s)
 }
 
 #[no_mangle]
