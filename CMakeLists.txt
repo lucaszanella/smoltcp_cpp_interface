@@ -21,4 +21,4 @@ target_link_libraries(smoltcp_cpp lsmoltcp_cpp_interface_rust)
 
 add_executable(http_smol_tcp_example ${CMAKE_CURRENT_SOURCE_DIR}/examples/http_smol_tcp_example)
 
-target_link_libraries(http_smol_tcp_example libsmoltcp_cpp lsmoltcp_cpp_interface_rust)
+target_link_libraries(http_smol_tcp_example smoltcp_cpp lsmoltcp_cpp_interface_rust dl pthread)

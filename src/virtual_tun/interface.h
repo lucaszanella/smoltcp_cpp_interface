@@ -25,29 +25,30 @@ namespace smoltcp
         size_t len;
     };
 
+    //BIG TODO: does this delete everything or just the pointed value?
     struct Buffer
     {
     public:
-        std::unique_ptr<uint8_t *> data;
+        std::unique_ptr<uint8_t[]> data;
         size_t len = 0;
         Buffer(CBuffer cBuffer)
         {
-            data = std::make_unique<uint8_t *>(cBuffer.data);
+            data = std::unique_ptr<uint8_t[]>(cBuffer.data);
             len = cBuffer.len;
         }
         Buffer(bool empty)
         {
-            data = std::make_unique<uint8_t *>(nullptr);
+            data = std::unique_ptr<uint8_t[]>(nullptr);
             this->len = 0;
+        }
+
+        uint8_t* getData() {
+            return data.get();
         }
         bool empty = false;
     };
 
-    extern "C" uint8_t *cpp_allocate_buffer(size_t size)
-    {
-        uint8_t *buffer = new uint8_t[size];
-        return buffer;
-    }
+    extern "C" uint8_t *cpp_allocate_buffer(size_t size);
 
     class Instant
     {
@@ -95,19 +96,12 @@ namespace smoltcp
         uint16_t port;
     };
 
-    extern "C" void cppDeleteArray(uint8_t *data)
-    {
-        delete[] data;
-    }
-
-    extern "C" void cppDeletePointer(uint8_t *data)
-    {
-        delete data;
-    }
+    extern "C" void cppDeleteArray(uint8_t *data);
+    extern "C" void cppDeletePointer(uint8_t *data);
 
     extern "C" SmolStackPtr smol_stack_smol_stack_new_virtual_tun(const char *interfaceName);
     extern "C" SmolStackPtr smol_stack_smol_stack_new_tun(const char *interfaceName);
-    extern "C" SmolStackPtr smol_stack_smol_stack_new_tap(const char *interfaceName);    
+    extern "C" SmolStackPtr smol_stack_smol_stack_new_tap(const char *interfaceName);
     extern "C" uint8_t smol_stack_add_socket(SmolStackPtr, uint8_t socketType, SocketHandle socketHandle);
     extern "C" void smol_stack_poll(SmolStackPtr);
     extern "C" void smol_stack_phy_wait(SmolStackPtr, int64_t timestamp);
@@ -126,13 +120,6 @@ namespace smoltcp
     extern "C" uint8_t smol_stack_virtual_tun_receive_wait(SmolStackPtr, CBuffer *cbuffer, uint8_t *(*)(size_t));
     extern "C" uint8_t smol_stack_virtual_tun_receive_instantly(SmolStackPtr, CBuffer *cbuffer, uint8_t *(*)(size_t));
     extern "C" void smol_stack_destroy(void *);
-
-    enum StackType
-    {
-        VirtualTun,
-        Tun,
-        Tap
-    };
 
     class RustSlice
     {
@@ -198,6 +185,13 @@ namespace smoltcp
         std::unordered_map<size_t, SmolSocket> smolSocketHandles;
 
     public:
+        enum StackType
+        {
+            VirtualTun,
+            Tun,
+            Tap
+        };
+
         TunSmolStack(std::string interfaceName, StackType stackType)
         {
             if (stackType == StackType::VirtualTun)

@@ -20,7 +20,7 @@ extern "C" uint8_t destruct(void *smolOwner_)
 
 int main()
 {
-    TunSmolStack tunSmolStack("tun1", StackType::Tun);
+    TunSmolStack tunSmolStack("tun1", TunSmolStack::StackType::Tun);
 
     tunSmolStack.addIpv4Address(CIpv4Cidr{
         CIpv4Address{
@@ -85,7 +85,7 @@ int main()
                 auto buffer = tunSmolStack.receive(smolSocket);
                 if (!buffer.empty)
                 {
-                    printBuffer(*buffer.data.get(), buffer.len);
+                    printBuffer(buffer.data.get(), buffer.len);
                 }
                 else
                 {
