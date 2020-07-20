@@ -1,3 +1,6 @@
+#ifndef SMOLTCP_UTILS_H
+#define SMOLTCP_UTILS_H
+
 #include <iostream>
 
 void printBuffer(uint8_t* data, size_t len) {
@@ -6,3 +9,5 @@ void printBuffer(uint8_t* data, size_t len) {
     }
     std::cout << std::endl;
 }
+
+#endif //SMOLTCP_UTILS_H
