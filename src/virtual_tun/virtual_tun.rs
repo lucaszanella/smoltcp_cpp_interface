@@ -80,6 +80,7 @@ impl<'d> Device<'d> for VirtualTunInterface {
         let mut buffer = vec![0; self.mtu];
         match self.recv(&mut buffer[..]) {
             Ok(size) => {
+                println!("virtual_tun receive size {}", size);
                 buffer.resize(size, 0);
                 let rx = RxToken {
                     lower: Rc::new(RefCell::new(self.clone())),
@@ -97,6 +98,8 @@ impl<'d> Device<'d> for VirtualTunInterface {
     }
 
     fn transmit(&'d mut self) -> Option<Self::TxToken> {
+        println!("virtual_tun transmit");
+
         Some(TxToken {
             lower: Rc::new(RefCell::new(self.clone())),
         })

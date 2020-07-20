@@ -40,6 +40,7 @@ namespace smoltcp
         {
             data = std::unique_ptr<uint8_t[]>(nullptr);
             this->len = 0;
+            this->empty = empty;
         }
 
         uint8_t* getData() {

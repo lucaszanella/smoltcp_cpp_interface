@@ -93,6 +93,7 @@ impl<'a> SmolSocket {
         {
             panic!("this socket type needs an endpoint to send to");
         }
+        println!("packet sent!");
         self.to_send.lock().unwrap().push_back(packet);
         0
     }
@@ -133,6 +134,7 @@ impl<'a> SmolSocket {
             //TODO: verify assertion below
             //lock happens very birefly, so the list is not kept locked much time
             None => {
+                println!("no packets in current_to_send, getting brand new one");
                 let packet = self.to_send.lock().unwrap().pop_front();
                 packet
             }
@@ -404,9 +406,11 @@ where
                     }
                     //Outside of match because it matches as reference so we cannot move
                     if put_back {
+                        println!("ATTENTION: putting the packet back");
                         smol_socket.current_to_send = packet;
                     }
                 } else {
+                    println!("socket cannot send");
                     //1
                 }
                 if socket.can_recv() {
@@ -502,7 +506,8 @@ where
         {
             //Create a scope so we hold the queue for the least ammount needed
             //TODO: do I really need to create a scope?
-            s = packets_from_inside.lock().unwrap().pop_front()
+            s = packets_from_inside.lock().unwrap().pop_front();
+            //println!("packets_from_inside pop_front, now has {} elements", packets_from_inside.lock().unwrap().len())
         }
         match s {
             Some(s) => {
