@@ -25,7 +25,7 @@ log = "0.4.4"
 #features = ["std", "phy-tun_interface", "proto-ipv4", "proto-ipv6", "socket-tcp"]
 
 [lib]
-crate-type=["cdylib"]
+crate-type=["cdylib", "staticlib"]
 
 [[example]]
 name = "virtual_tun_http"
