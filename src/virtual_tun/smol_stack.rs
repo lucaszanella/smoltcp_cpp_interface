@@ -5,6 +5,7 @@ use smoltcp::iface::{Interface, InterfaceBuilder, Routes};
 use smoltcp::phy::wait as phy_wait;
 use smoltcp::phy::{self, Device};
 use std::os::unix::io::AsRawFd;
+use std::time::Duration;
 
 use smoltcp::socket::{
     AnySocket, RawSocket, RawSocketBuffer, Socket, SocketHandle, SocketRef, SocketSet, TcpSocket,
@@ -521,5 +522,24 @@ where
             }
             None => 1,
         }
+    }
+
+     /*
+        Waits until either data was sent or received, that is, 
+        either packets_from_outside or packets_from_inside
+        have changed
+    */
+    pub fn phy_wait(&mut self) {
+        let packets_from_outside =
+            self.packets_from_outside.clone();
+        let (mutex, has_data_condition_variable) = &*self.has_data.as_ref().unwrap().clone();
+        has_data_condition_variable.wait(mutex.lock().unwrap());
+    }
+
+    pub fn phy_wait_timeout(&mut self, duration: Duration) {
+        let packets_from_outside =
+            self.packets_from_outside.clone();
+        let (mutex, has_data_condition_variable) = &*self.has_data.as_ref().unwrap().clone();
+        has_data_condition_variable.wait_timeout(mutex.lock().unwrap(), duration);
     }
 }

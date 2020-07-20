@@ -8,7 +8,7 @@ add_library(lsmoltcp_cpp_interface_rust STATIC IMPORTED)
 
 set_target_properties(lsmoltcp_cpp_interface_rust PROPERTIES IMPORTED_LOCATION ${CMAKE_CURRENT_SOURCE_DIR}/target/debug/libsmoltcp_cpp_interface_rust.a)
 
-add_library(libsmoltcp_cpp ${LIBSMOLTCP_SOURCES})
+add_library(smoltcp_cpp ${LIBSMOLTCP_SOURCES})
 
 add_custom_target(
     lib_smol_tcp_rust
@@ -16,8 +16,8 @@ add_custom_target(
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
 )
 
-add_dependencies(libsmoltcp_cpp lib_smol_tcp_rust)
-target_link_libraries(libsmoltcp_cpp lsmoltcp_cpp_interface_rust)
+add_dependencies(smoltcp_cpp lib_smol_tcp_rust)
+target_link_libraries(smoltcp_cpp lsmoltcp_cpp_interface_rust)
 
 add_executable(http_smol_tcp_example ${CMAKE_CURRENT_SOURCE_DIR}/examples/http_smol_tcp_example)
 

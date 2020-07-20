@@ -7,6 +7,7 @@ use smoltcp::phy::wait as phy_wait;
 use smoltcp::phy::TapInterface as TapDevice;
 use smoltcp::phy::TunInterface as TunDevice;
 use smoltcp::phy::TunInterface;
+use std::time::Duration;
 use smoltcp::socket::{SocketHandle, TcpSocket};
 use smoltcp::time::Instant;
 use smoltcp::wire::{IpAddress, IpCidr, IpEndpoint, Ipv4Address, Ipv6Address};
@@ -235,7 +236,7 @@ impl<'a, 'b: 'a, 'c: 'a + 'b> SmolStackType<'a, 'b, 'c> {
     pub fn phy_wait(&mut self, timestamp: i64) {
         match self {
             &mut SmolStackType::VirtualTun(ref mut smol_stack) => {
-                //phy_wait(smol_stack.device.unwrap().as_raw_fd(), smol_stack.interface.unwrap().poll_delay(&smol_stack.sockets, timestamp)).expect("wait error")
+                smol_stack.phy_wait_timeout(Duration::from_millis(timestamp as u64))
             }
             &mut SmolStackType::Tun(ref mut smol_stack) => phy_wait(
                 smol_stack.fd.unwrap(),

@@ -64,25 +64,6 @@ impl<'a> VirtualTunInterface {
             None => Err(ERR_WOULD_BLOCK),
         }
     }
-
-    /*
-        Waits until either data was sent or received, that is, 
-        either packets_from_outside or packets_from_inside
-        have changed
-    */
-    pub fn wait(&mut self) {
-        let packets_from_outside =
-            &*self.packets_from_outside.clone();
-        let (mutex, has_data_condition_variable) = &*self.has_data.clone();
-        has_data_condition_variable.wait(mutex.lock().unwrap());
-    }
-
-    pub fn wait_timeout(&mut self, duration: Duration) {
-        let packets_from_outside =
-            &*self.packets_from_outside.clone();
-        let (mutex, has_data_condition_variable) = &*self.has_data.clone();
-        has_data_condition_variable.wait_timeout(mutex.lock().unwrap(), duration);
-    }
 }
 
 impl<'d> Device<'d> for VirtualTunInterface {
