@@ -143,6 +143,8 @@ impl<'a> phy::TxToken for TxToken {
         let mut buffer = vec![0; len];
         let result = f(&mut buffer);
         
+        println!("!!!!producing packet: {:x?}", buffer);
+
         let packets_from_inside = &*lower.packets_from_inside.clone();
         {
             packets_from_inside.lock().unwrap().push_back(buffer);
