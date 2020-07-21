@@ -17,7 +17,6 @@ use std::ops::Deref;
 use std::slice;
 
 static ERR_WOULD_BLOCK: u32 = 1;
-/// A virtual TUN interface.
 
 #[derive(Clone)]
 pub struct VirtualTunInterface {
@@ -53,7 +52,6 @@ impl<'a> VirtualTunInterface {
     }
     //TODO: this cant block, I guess?? Or it can..
     fn recv(&mut self, buffer: &mut [u8]) -> core::result::Result<usize, u32> {
-        //TODO: should I clone?
         let packets_from_outside = &*self.packets_from_outside.clone();
         let p;
         {
@@ -61,11 +59,7 @@ impl<'a> VirtualTunInterface {
         }
         match p {
             Some(packet) => {
-                //println!("received packets_from_outside with size {}", packet.data.len());
-                //buffer.clone_from_slice(packet.data.as_slice());
-                //println!("data before copy: {:x?}", packet.data.as_slice());
                 copy_slice(buffer, packet.data.as_slice());
-                //println!("buffer after copy: {:x?}", buffer);
                 let (mutex, has_data_condition_variable) = &*self.has_data.clone();
                 has_data_condition_variable.notify_one();
                 Ok(packet.data.len())
@@ -93,7 +87,6 @@ impl<'d> Device<'d> for VirtualTunInterface {
         let mut buffer = vec![0; self.mtu];
         match self.recv(&mut buffer[..]) {
             Ok(size) => {
-                println!("virtual_tun received size {}", size);
                 buffer.resize(size, 0);
                 let rx = RxToken {
                     lower: Rc::new(RefCell::new(self.clone())),
@@ -111,8 +104,6 @@ impl<'d> Device<'d> for VirtualTunInterface {
     }
 
     fn transmit(&'d mut self) -> Option<Self::TxToken> {
-        println!("virtual_tun transmit");
-
         Some(TxToken {
             lower: Rc::new(RefCell::new(self.clone())),
         })
@@ -135,10 +126,7 @@ impl phy::RxToken for RxToken {
         F: FnOnce(&mut [u8]) -> Result<R>,
     {
         let mut lower = self.lower.as_ref().borrow_mut();
-        println!("RxToken gonna consume buffer of size {}", self.buffer.len());
         let r = f(&mut self.buffer[..]);
-        println!("RxToken filled buffer {:x?}", self.buffer.as_slice());
-        //println!("RxToken DID consume with size {}", r);
         let (mutex, has_data_condition_variable) = &*lower.has_data.clone();
         has_data_condition_variable.notify_one();
         r
@@ -159,8 +147,6 @@ impl<'a> phy::TxToken for TxToken {
         let mut buffer = vec![0; len];
         let result = f(&mut buffer);
         
-        println!("!!!!producing packet: {:x?}", buffer);
-
         let packets_from_inside = &*lower.packets_from_inside.clone();
         {
             packets_from_inside.lock().unwrap().push_back(buffer);

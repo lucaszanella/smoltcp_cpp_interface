@@ -134,7 +134,7 @@ impl<'a> SmolSocket {
             //TODO: verify assertion below
             //lock happens very birefly, so the list is not kept locked much time
             None => {
-                println!("no packets in current_to_send, getting brand new one");
+                //println!("no packets in current_to_send, getting brand new one");
                 let packet = self.to_send.lock().unwrap().pop_front();
                 packet
             }
