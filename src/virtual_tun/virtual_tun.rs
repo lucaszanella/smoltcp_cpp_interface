@@ -27,6 +27,15 @@ pub struct VirtualTunInterface {
     packets_from_outside: Arc<Mutex<VecDeque<Blob>>>,
 }
 
+fn copy_slice(dst: &mut [u8], src: &[u8]) -> usize {
+    let mut c = 0;
+    for (d, s) in dst.iter_mut().zip(src.iter()) {
+        *d = *s;
+        c += 1;
+    }
+    c 
+}
+
 impl<'a> VirtualTunInterface {
     pub fn new(
         _name: &str,
@@ -53,7 +62,8 @@ impl<'a> VirtualTunInterface {
         match p {
             Some(packet) => {
                 //println!("gonna copy from a slice with size {}", packet.data.as_slice().len());
-                buffer.copy_from_slice(packet.data.as_slice());
+                //buffer.clone_from_slice(packet.data.as_slice());
+                copy_slice(buffer, packet.data.as_slice());
                 let (mutex, has_data_condition_variable) = &*self.has_data.clone();
                 has_data_condition_variable.notify_one();
                 Ok(packet.data.len())
@@ -81,7 +91,7 @@ impl<'d> Device<'d> for VirtualTunInterface {
         let mut buffer = vec![0; self.mtu];
         match self.recv(&mut buffer[..]) {
             Ok(size) => {
-                println!("virtual_tun receive size {}", size);
+                //println!("virtual_tun receive size {}", size);
                 buffer.resize(size, 0);
                 let rx = RxToken {
                     lower: Rc::new(RefCell::new(self.clone())),
