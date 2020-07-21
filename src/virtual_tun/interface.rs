@@ -7,7 +7,6 @@ use smoltcp::phy::wait as phy_wait;
 use smoltcp::phy::TapInterface as TapDevice;
 use smoltcp::phy::TunInterface as TunDevice;
 use smoltcp::phy::TunInterface;
-use std::time::Duration;
 use smoltcp::socket::{SocketHandle, TcpSocket};
 use smoltcp::time::Instant;
 use smoltcp::wire::{IpAddress, IpCidr, IpEndpoint, Ipv4Address, Ipv6Address};
@@ -18,6 +17,7 @@ use std::os::unix::io::AsRawFd;
 use std::slice;
 use std::str::{self};
 use std::sync::{Arc, Condvar, Mutex};
+use std::time::Duration;
 
 pub enum SmolSocketType {
     VirtualTun,
@@ -68,7 +68,6 @@ impl<'a, 'b: 'a, 'c: 'a + 'b> SmolStackType<'a, 'b, 'c> {
             Some(packets_from_inside.clone()),
             Some(packets_from_outside.clone()),
             Some(has_data.clone()),
-
         );
         Box::new(SmolStackType::VirtualTun(smol_stack))
     }
@@ -630,7 +629,18 @@ pub extern "C" fn smol_stack_virtual_tun_receive_instantly(
 
 #[no_mangle]
 pub extern "C" fn smol_stack_virtual_tun_send(
-    smol_stack: &mut SmolStackType, 
-    blob: Blob) -> u8 {
+    smol_stack: &mut SmolStackType,
+    data: *mut u8,
+    len: usize,
+) -> u8 {
+    let slice = unsafe { slice::from_raw_parts(data, len) };
+    let mut packet_as_vector = Vec::new();
+    packet_as_vector.extend_from_slice(slice);
+    let blob = Blob {
+        data: packet_as_vector,
+        start: 0,
+        pointer_to_owner: None,
+        pointer_to_destructor: None,
+    };
     smol_stack.send(blob)
 }

@@ -52,6 +52,7 @@ impl<'a> VirtualTunInterface {
         }
         match p {
             Some(packet) => {
+                //println!("gonna copy from a slice with size {}", packet.data.as_slice().len());
                 buffer.copy_from_slice(packet.data.as_slice());
                 let (mutex, has_data_condition_variable) = &*self.has_data.clone();
                 has_data_condition_variable.notify_one();
