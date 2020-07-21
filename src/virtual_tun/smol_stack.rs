@@ -410,7 +410,7 @@ where
                         smol_socket.current_to_send = packet;
                     }
                 } else {
-                    println!("socket cannot send");
+                    //println!("socket cannot send");
                     //1
                 }
                 if socket.can_recv() {
