@@ -442,6 +442,7 @@ where
     //Send a packet to the stack (Ethernet/IP)
     //not to confuse with TCP/UDP/etc packets
     pub fn send(&mut self, blob: Blob) -> u8 {
+        //println!("stack received blob with size {}", blob.data.len());
         let packets_from_outside = &*self.packets_from_outside.as_ref().unwrap().clone();
         packets_from_outside.lock().unwrap().push_back(blob);
         0

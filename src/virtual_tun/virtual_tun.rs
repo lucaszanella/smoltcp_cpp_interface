@@ -61,9 +61,11 @@ impl<'a> VirtualTunInterface {
         }
         match p {
             Some(packet) => {
-                //println!("gonna copy from a slice with size {}", packet.data.as_slice().len());
+                //println!("received packets_from_outside with size {}", packet.data.len());
                 //buffer.clone_from_slice(packet.data.as_slice());
+                //println!("data before copy: {:x?}", packet.data.as_slice());
                 copy_slice(buffer, packet.data.as_slice());
+                //println!("buffer after copy: {:x?}", buffer);
                 let (mutex, has_data_condition_variable) = &*self.has_data.clone();
                 has_data_condition_variable.notify_one();
                 Ok(packet.data.len())
@@ -91,7 +93,7 @@ impl<'d> Device<'d> for VirtualTunInterface {
         let mut buffer = vec![0; self.mtu];
         match self.recv(&mut buffer[..]) {
             Ok(size) => {
-                //println!("virtual_tun receive size {}", size);
+                println!("virtual_tun received size {}", size);
                 buffer.resize(size, 0);
                 let rx = RxToken {
                     lower: Rc::new(RefCell::new(self.clone())),
@@ -133,7 +135,10 @@ impl phy::RxToken for RxToken {
         F: FnOnce(&mut [u8]) -> Result<R>,
     {
         let mut lower = self.lower.as_ref().borrow_mut();
+        println!("RxToken gonna consume buffer of size {}", self.buffer.len());
         let r = f(&mut self.buffer[..]);
+        println!("RxToken filled buffer {:x?}", self.buffer.as_slice());
+        //println!("RxToken DID consume with size {}", r);
         let (mutex, has_data_condition_variable) = &*lower.has_data.clone();
         has_data_condition_variable.notify_one();
         r
