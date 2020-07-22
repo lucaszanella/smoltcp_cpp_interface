@@ -93,7 +93,7 @@ impl<'a> SmolSocket {
         {
             panic!("this socket type needs an endpoint to send to");
         }
-        println!("packet sent!");
+        //println!("packet sent!");
         self.to_send.lock().unwrap().push_back(packet);
         0
     }
@@ -369,6 +369,11 @@ where
         }
         0
     }
+
+    /*
+        Sends/receives packets queued in the given SmolSocket/socket
+        pointed by smol_socket_handle
+    */
     pub fn spin(&mut self, smol_socket_handle: usize) -> u8 {
         let smol_socket = self.smol_sockets.get_mut(&smol_socket_handle).unwrap();
         match smol_socket.socket_type {
