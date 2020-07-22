@@ -364,7 +364,7 @@ where
     }
 
     pub fn spin_all(&mut self) -> u8 {
-        for (smol_socket_handle, _) in self.smol_sockets.iter_mut() {
+        for (smol_socket_handle, smol_socket) in self.smol_sockets.iter_mut() {
             self.spin(smol_socket_handle.clone());
         }
         0
