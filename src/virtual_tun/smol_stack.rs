@@ -196,6 +196,11 @@ where
         }
     }
 
+    pub fn get_smol_socket(&mut self, smol_socket_handle: usize) -> Option<&mut SmolSocket> {
+        let smol_socket = self.smol_sockets.get_mut(&smol_socket_handle);
+        smol_socket
+    }
+
     pub fn new_socket_handle_key(&mut self) -> usize {
         //TODO: panic when usize is about to overflow
         self.current_key += 1;
@@ -243,11 +248,6 @@ where
                 panic! {"wrong choice for socket type"}
             }
         }
-    }
-
-    pub fn get_smol_socket(&mut self, smol_socket_handle: usize) -> Option<&mut SmolSocket> {
-        let smol_socket = self.smol_sockets.get_mut(&smol_socket_handle);
-        smol_socket
     }
 
     pub fn tcp_connect_ipv4(
@@ -363,6 +363,12 @@ where
         }
     }
 
+    pub fn spin_all(&mut self) -> u8 {
+        for (smol_socket_handle, _) in self.smol_sockets.iter_mut() {
+            self.spin(smol_socket_handle.clone());
+        }
+        0
+    }
     pub fn spin(&mut self, smol_socket_handle: usize) -> u8 {
         let smol_socket = self.smol_sockets.get_mut(&smol_socket_handle).unwrap();
         match smol_socket.socket_type {
@@ -374,7 +380,6 @@ where
                     let mut packet = smol_socket.get_latest_packet();
                     match &mut packet {
                         Some(ref mut packet) => {
-                            println!("some packet");
                             //Sends from the start (which might be more than 0 if we didn't send
                             //an entire packet in the last call)
                             let bytes_sent = socket
@@ -536,15 +541,11 @@ where
         have changed
     */
     pub fn phy_wait(&mut self) {
-        let packets_from_outside =
-            self.packets_from_outside.clone();
         let (mutex, has_data_condition_variable) = &*self.has_data.as_ref().unwrap().clone();
         has_data_condition_variable.wait(mutex.lock().unwrap());
     }
 
     pub fn phy_wait_timeout(&mut self, duration: Duration) {
-        let packets_from_outside =
-            self.packets_from_outside.clone();
         let (mutex, has_data_condition_variable) = &*self.has_data.as_ref().unwrap().clone();
         has_data_condition_variable.wait_timeout(mutex.lock().unwrap(), duration);
     }

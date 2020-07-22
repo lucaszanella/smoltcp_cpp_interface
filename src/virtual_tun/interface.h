@@ -43,7 +43,8 @@ namespace smoltcp
             this->empty = empty;
         }
 
-        uint8_t* getData() {
+        uint8_t *getData()
+        {
             return data.get();
         }
         bool empty = false;
@@ -107,6 +108,7 @@ namespace smoltcp
     extern "C" void smol_stack_poll(SmolStackPtr);
     extern "C" void smol_stack_phy_wait(SmolStackPtr, int64_t timestamp);
     extern "C" void smol_stack_spin(SmolStackPtr, SocketHandle socketHandle);
+    extern "C" void smol_stack_spin_all(SmolStackPtr);
     extern "C" void smol_stack_tcp_connect_ipv4(SmolStackPtr, SocketHandle socketHandle, CIpv4Address, uint8_t src_port, uint8_t dst_port);
     extern "C" void smol_stack_tcp_connect_ipv6(SmolStackPtr, SocketHandle socketHandle, CIpv6Address, uint8_t src_port, uint8_t dst_port);
     extern "C" uint8_t smol_stack_smol_socket_send(SmolStackPtr, SocketHandle socketHandle, const uint8_t *data, size_t len, CIpEndpoint endpoint, void *, uint8_t (*)(void *));
@@ -242,6 +244,11 @@ namespace smoltcp
         void spin(SmolSocket smolSocket)
         {
             smol_stack_spin(smolStackPtr, smolSocket.handle);
+        }
+
+        void spinAll(SmolSocket smolSocket)
+        {
+            smol_stack_spin_all(smolStackPtr);
         }
 
         /*

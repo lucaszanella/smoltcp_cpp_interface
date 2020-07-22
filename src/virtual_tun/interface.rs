@@ -129,7 +129,7 @@ impl<'a, 'b: 'a, 'c: 'a + 'b> SmolStackType<'a, 'b, 'c> {
             }
         }
     }
-
+    
     pub fn get_smol_socket(&mut self, socket_handle_key: usize) -> Option<&mut SmolSocket> {
         match self {
             &mut SmolStackType::VirtualTun(ref mut smol_stack) => {
@@ -143,6 +143,7 @@ impl<'a, 'b: 'a, 'c: 'a + 'b> SmolStackType<'a, 'b, 'c> {
             }
         }
     }
+    
 
     pub fn tcp_connect_ipv6(
         &mut self,
@@ -229,6 +230,14 @@ impl<'a, 'b: 'a, 'c: 'a + 'b> SmolStackType<'a, 'b, 'c> {
             &mut SmolStackType::VirtualTun(ref mut smol_stack) => smol_stack.spin(socket_handle),
             &mut SmolStackType::Tun(ref mut smol_stack) => smol_stack.spin(socket_handle),
             &mut SmolStackType::Tap(ref mut smol_stack) => smol_stack.spin(socket_handle),
+        }
+    }
+
+    pub fn spin_all(&mut self) -> u8 {
+        match self {
+            &mut SmolStackType::VirtualTun(ref mut smol_stack) => smol_stack.spin_all(),
+            &mut SmolStackType::Tun(ref mut smol_stack) => smol_stack.spin_all(),
+            &mut SmolStackType::Tap(ref mut smol_stack) => smol_stack.spin_all(),
         }
     }
 
@@ -571,6 +580,11 @@ pub extern "C" fn smol_stack_poll(smol_stack: &mut SmolStackType) -> u8 {
 #[no_mangle]
 pub extern "C" fn smol_stack_spin(smol_stack: &mut SmolStackType, socket_handle: usize) -> u8 {
     smol_stack.spin(socket_handle)
+}
+
+#[no_mangle]
+pub extern "C" fn smol_stack_spin_all(smol_stack: &mut SmolStackType) -> u8 {
+    smol_stack.spin_all()
 }
 
 #[no_mangle]
