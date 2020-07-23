@@ -152,6 +152,7 @@ impl<'a> phy::TxToken for TxToken {
             packets_from_inside.lock().unwrap().push_back(buffer);
         }
         
+        //TODO: I think this is not necessary?
         let (mutex, has_data_condition_variable) = &*lower.has_data.clone();
         has_data_condition_variable.notify_one();
         result

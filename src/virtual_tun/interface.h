@@ -246,7 +246,7 @@ namespace smoltcp
             smol_stack_spin(smolStackPtr, smolSocket.handle);
         }
 
-        void spinAll(SmolSocket smolSocket)
+        void spinAll()
         {
             smol_stack_spin_all(smolStackPtr);
         }

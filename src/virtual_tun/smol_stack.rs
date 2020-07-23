@@ -25,6 +25,7 @@ use std::ptr;
 use std::rc::Rc;
 use std::slice;
 use std::sync::{Arc, Condvar, Mutex};
+use std::vec::Vec;
 
 #[derive(PartialEq, Clone)]
 pub enum SocketType {
@@ -74,16 +75,27 @@ pub struct SmolSocket {
     //If we couldn't send entire packet at once, hold it here for next send
     current_to_send: Option<Packet>,
     pub received: Arc<Mutex<VecDeque<Vec<u8>>>>,
+    /*
+        Same has_data condition variable used by SmolStack
+        Used so EVERY time something is written to sockets
+        the poller loop is unlocked
+    */
+    has_data: Option<Arc<(Mutex<()>, Condvar)>>,
 }
 
 impl<'a> SmolSocket {
-    pub fn new(socket_handle: SocketHandle, socket_type: SocketType) -> SmolSocket {
+    pub fn new(
+        socket_handle: SocketHandle,
+        socket_type: SocketType,
+        has_data: Option<Arc<(Mutex<()>, Condvar)>>,
+    ) -> SmolSocket {
         SmolSocket {
             socket_type: socket_type,
             socket_handle: socket_handle,
             to_send: Arc::new(Mutex::new(VecDeque::new())),
             current_to_send: None,
             received: Arc::new(Mutex::new(VecDeque::new())),
+            has_data: has_data,
         }
     }
 
@@ -95,6 +107,9 @@ impl<'a> SmolSocket {
         }
         //println!("packet sent!");
         self.to_send.lock().unwrap().push_back(packet);
+        let (mutex, has_data_condition_variable) = &*self.has_data.as_ref().unwrap().clone();
+        //Unlock the poller thread because new data is available
+        has_data_condition_variable.notify_one();
         0
     }
     //TODO: figure out a better way than copying. Inneficient receive
@@ -175,11 +190,10 @@ where
         fd: Option<i32>,
         packets_from_inside: Option<Arc<Mutex<VecDeque<Vec<u8>>>>>,
         packets_from_outside: Option<Arc<Mutex<VecDeque<Blob>>>>,
-        has_data: Option<Arc<(Mutex<()>, Condvar)>>
+        has_data: Option<Arc<(Mutex<()>, Condvar)>>,
     ) -> SmolStack<'a, 'b, 'c, DeviceT> {
         let socket_set = SocketSet::new(vec![]);
         let ip_addrs = std::vec::Vec::new();
-
         SmolStack {
             sockets: socket_set,
             current_key: 0,
@@ -214,7 +228,7 @@ where
                 let tx_buffer = TcpSocketBuffer::new(vec![0; 65000]);
                 let socket = TcpSocket::new(rx_buffer, tx_buffer);
                 let handle = self.sockets.add(socket);
-                let smol_socket = SmolSocket::new(handle, SocketType::TCP);
+                let smol_socket = SmolSocket::new(handle, SocketType::TCP, self.has_data.clone());
                 self.smol_sockets.insert(smol_socket_handle, smol_socket);
                 0
             }
@@ -223,7 +237,7 @@ where
                 let tx_buffer = UdpSocketBuffer::new(Vec::new(), vec![0; 1024]);
                 let socket = UdpSocket::new(rx_buffer, tx_buffer);
                 let handle = self.sockets.add(socket);
-                let smol_socket = SmolSocket::new(handle, SocketType::UDP);
+                let smol_socket = SmolSocket::new(handle, SocketType::UDP, self.has_data.clone());
                 self.smol_sockets.insert(smol_socket_handle, smol_socket);
                 0
             }
@@ -364,7 +378,13 @@ where
     }
 
     pub fn spin_all(&mut self) -> u8 {
+        //TODO: maybe store self.smol_sockets in a smart pointer
+        //so we don't do this copy every time
+        let mut smol_socket_handles = Vec::<usize>::new();
         for (smol_socket_handle, smol_socket) in self.smol_sockets.iter_mut() {
+            smol_socket_handles.push(smol_socket_handle.clone());
+        }
+        for (smol_socket_handle) in smol_socket_handles.iter_mut() {
             self.spin(smol_socket_handle.clone());
         }
         0
@@ -455,6 +475,9 @@ where
         //println!("stack received blob with size {}", blob.data.len());
         let packets_from_outside = &*self.packets_from_outside.as_ref().unwrap().clone();
         packets_from_outside.lock().unwrap().push_back(blob);
+        let (mutex, has_data_condition_variable) = &*self.has_data.as_ref().unwrap().clone();
+        //Unlock the poller thread because new data is available
+        has_data_condition_variable.notify_one();
         0
     }
 
@@ -471,8 +494,7 @@ where
     ) -> u8 {
         let s;
         //let has_data = &*self.has_data.as_ref().unwrap().clone();
-        let packets_from_inside =
-            &*self.packets_from_inside.as_ref().unwrap().clone();
+        let packets_from_inside = &*self.packets_from_inside.as_ref().unwrap().clone();
         {
             //Create a scope so we hold the queue for the least ammount needed
             //TODO: do I really need to create a scope?
@@ -534,14 +556,17 @@ where
                         len: s.len(),
                     };
                 }
+                let (mutex, has_data_condition_variable) = &*self.has_data.as_ref().unwrap().clone();
+                //Unlock the poller thread because new data is available
+                has_data_condition_variable.notify_one();
                 0
             }
             None => 1,
         }
     }
 
-     /*
-        Waits until either data was sent or received, that is, 
+    /*
+        Waits until either data was sent or received, that is,
         either packets_from_outside or packets_from_inside
         have changed
     */
