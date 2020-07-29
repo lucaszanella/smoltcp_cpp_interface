@@ -129,7 +129,6 @@ impl<'a, 'b: 'a, 'c: 'a + 'b> SmolStackType<'a, 'b, 'c> {
             }
         }
     }
-    
     pub fn get_smol_socket(&mut self, socket_handle_key: usize) -> Option<&mut SmolSocket> {
         match self {
             &mut SmolStackType::VirtualTun(ref mut smol_stack) => {
@@ -143,7 +142,6 @@ impl<'a, 'b: 'a, 'c: 'a + 'b> SmolStackType<'a, 'b, 'c> {
             }
         }
     }
-    
 
     pub fn tcp_connect_ipv6(
         &mut self,
@@ -532,7 +530,6 @@ pub extern "C" fn smol_stack_smol_socket_receive(
     }
 }
 
-
 #[no_mangle]
 pub extern "C" fn smol_stack_smol_socket_receive_wait(
     smol_stack: &mut SmolStackType,
@@ -637,15 +634,6 @@ pub extern "C" fn smol_stack_finalize<'a, 'b: 'a, 'c: 'a + 'b>(
 
 #[no_mangle]
 pub extern "C" fn smol_stack_destroy(_: Option<Box<SmolStackType>>) {}
-
-#[no_mangle]
-pub extern "C" fn smol_stack_virtual_tun_receive_wait(
-    smol_stack: &mut SmolStackType,
-    cbuffer: *mut CBuffer,
-    allocate_function: extern "C" fn(size: usize) -> *mut u8,
-) -> u8 {
-    smol_stack.receive_wait(cbuffer, allocate_function)
-}
 
 #[no_mangle]
 pub extern "C" fn smol_stack_virtual_tun_receive_instantly(

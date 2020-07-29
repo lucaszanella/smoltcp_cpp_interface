@@ -288,9 +288,9 @@ namespace smoltcp
                 std::nullopt;
             }
         }
-
+        
         //TODO: return an optional or the buffer since it waits so we're sure it returns a buffer?
-        std::optional<std::shared_ptr<Buffer>> receive_wait(SmolSocket smolSocket)
+        std::optional<std::shared_ptr<Buffer>> receiveWait(SmolSocket smolSocket)
         {
             CBuffer cbuffer;
 
@@ -298,6 +298,8 @@ namespace smoltcp
             if (r == 0)
             {
                 auto buffer = std::make_shared<Buffer>(cbuffer);
+                //std::cout << "just received" << std::endl;
+                //printBuffer3(cbuffer.data, cbuffer.len);
                 return std::optional<std::shared_ptr<Buffer>>(buffer);
             }
             else

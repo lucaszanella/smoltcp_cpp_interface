@@ -112,7 +112,6 @@ impl<'a> SmolSocket {
         has_data_condition_variable.notify_one();
         0
     }
-    
     //TODO: figure out a better way than copying. Inneficient receive
     pub fn receive(
         &mut self,
@@ -148,20 +147,19 @@ impl<'a> SmolSocket {
         allocate_function: extern "C" fn(size: usize) -> *mut u8,
     ) -> u8 {
         let mut s;
-        let mut foundPacket = false;
-        {
-            //Create a scope so we hold the queue for the least ammount needed
-            //TODO: do I really need to create a scope?
-            s = self.received.lock().unwrap().pop_front()
-        }
-        while (!foundPacket) {
+        loop {
             {
                 s = self.received.lock().unwrap().pop_front()
             }
-            match &s{
-                Some(s) => {foundPacket = true},
+            match &s {
+                //If we have a packet, we dont need to wait, so break
+                Some(_) => {
+                    break;
+                }
                 None => {}
             }
+            let (mutex, has_data_condition_variable) = &*self.has_data.as_ref().unwrap().clone();
+            has_data_condition_variable.wait(mutex.lock().unwrap());
         }
         match s {
             Some(s) => {
@@ -173,6 +171,12 @@ impl<'a> SmolSocket {
                         len: s.len(),
                     };
                 }
+                /*
+                let (mutex, has_data_condition_variable) =
+                    &*self.has_data.as_ref().unwrap().clone();
+                //Unlock the poller thread because new data is available
+                has_data_condition_variable.notify_one();
+                */
                 0
             }
             None => 1,
@@ -491,6 +495,9 @@ where
                                 s.copy_from_slice(data);
                                 smol_socket.received.lock().unwrap().push_back(s);
                             }
+                            let has_data = smol_socket.has_data.as_ref().unwrap();
+                            let (_, has_data_condition_variable) = &*has_data.clone();
+                            has_data_condition_variable.notify_one();
                             (len, ())
                         })
                         .unwrap();
@@ -556,6 +563,10 @@ where
                         len: s.len(),
                     };
                 }
+                let (mutex, has_data_condition_variable) =
+                    &*self.has_data.as_ref().unwrap().clone();
+                //Unlock the poller thread because new data is available
+                has_data_condition_variable.notify_one();
                 //0 means everything went well
                 0
             }
@@ -595,7 +606,8 @@ where
                         len: s.len(),
                     };
                 }
-                let (mutex, has_data_condition_variable) = &*self.has_data.as_ref().unwrap().clone();
+                let (mutex, has_data_condition_variable) =
+                    &*self.has_data.as_ref().unwrap().clone();
                 //Unlock the poller thread because new data is available
                 has_data_condition_variable.notify_one();
                 0
