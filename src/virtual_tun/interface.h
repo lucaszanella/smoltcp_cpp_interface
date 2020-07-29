@@ -403,8 +403,10 @@ namespace smoltcp
 
         ~TunSmolStack()
         {
+            std::cout << "TunSmolStack destruction" << std::endl;
             smol_stack_destroy(smolStackPtr);
         }
+        
     };
 } //namespace smoltcp
 #endif //SMOL_TCP_INTERFACE_H

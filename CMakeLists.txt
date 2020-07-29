@@ -17,7 +17,7 @@ add_custom_target(
 )
 
 add_dependencies(smoltcp_cpp lib_smol_tcp_rust)
-target_link_libraries(smoltcp_cpp lsmoltcp_cpp_interface_rust)
+target_link_libraries(smoltcp_cpp INTERFACE lsmoltcp_cpp_interface_rust -ldl)
 
 add_executable(http_smol_tcp_tun_example ${CMAKE_CURRENT_SOURCE_DIR}/examples/http_smol_tcp_tun_example)
 add_executable(http_smol_tcp_virtual_tun_example ${CMAKE_CURRENT_SOURCE_DIR}/examples/http_smol_tcp_virtual_tun_example)
