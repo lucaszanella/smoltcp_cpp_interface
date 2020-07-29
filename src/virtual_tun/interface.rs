@@ -532,6 +532,21 @@ pub extern "C" fn smol_stack_smol_socket_receive(
     }
 }
 
+
+#[no_mangle]
+pub extern "C" fn smol_stack_smol_socket_receive_wait(
+    smol_stack: &mut SmolStackType,
+    socket_handle_key: usize,
+    cbuffer: *mut CBuffer,
+    allocate_function: extern "C" fn(size: usize) -> *mut u8,
+) -> u8 {
+    let smol_socket = smol_stack.get_smol_socket(socket_handle_key);
+    match smol_socket {
+        Some(smol_socket) => smol_socket.receive_wait(cbuffer, allocate_function),
+        None => 1,
+    }
+}
+
 #[no_mangle]
 pub extern "C" fn smol_stack_add_socket(
     smol_stack: &mut SmolStackType,

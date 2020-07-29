@@ -112,6 +112,7 @@ impl<'a> SmolSocket {
         has_data_condition_variable.notify_one();
         0
     }
+    
     //TODO: figure out a better way than copying. Inneficient receive
     pub fn receive(
         &mut self,
@@ -123,6 +124,44 @@ impl<'a> SmolSocket {
             //Create a scope so we hold the queue for the least ammount needed
             //TODO: do I really need to create a scope?
             s = self.received.lock().unwrap().pop_front()
+        }
+        match s {
+            Some(s) => {
+                let p: *mut u8 = allocate_function(s.len());
+                unsafe { ptr::copy(s.as_ptr(), p, s.len()) };
+                unsafe {
+                    *cbuffer = CBuffer {
+                        data: p,
+                        len: s.len(),
+                    };
+                }
+                0
+            }
+            None => 1,
+        }
+    }
+
+    //TODO: figure out a better way than copying. Inneficient receive
+    pub fn receive_wait(
+        &mut self,
+        cbuffer: *mut CBuffer,
+        allocate_function: extern "C" fn(size: usize) -> *mut u8,
+    ) -> u8 {
+        let mut s;
+        let mut foundPacket = false;
+        {
+            //Create a scope so we hold the queue for the least ammount needed
+            //TODO: do I really need to create a scope?
+            s = self.received.lock().unwrap().pop_front()
+        }
+        while (!foundPacket) {
+            {
+                s = self.received.lock().unwrap().pop_front()
+            }
+            match &s{
+                Some(s) => {foundPacket = true},
+                None => {}
+            }
         }
         match s {
             Some(s) => {

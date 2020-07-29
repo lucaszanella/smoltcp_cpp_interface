@@ -83,7 +83,7 @@ int main()
             if (state == State::Response)
             {
                 auto buffer = tunSmolStack.receive(smolSocket);
-                if (!buffer.empty)
+                if (buffer)
                 {
                     printBuffer(buffer.data.get(), buffer.len);
                 }
