@@ -129,6 +129,28 @@ impl<'a, 'b: 'a, 'c: 'a + 'b> SmolStackType<'a, 'b, 'c> {
             }
         }
     }
+
+    pub fn tcp_connect(
+        &mut self,
+        socket_handle_key: usize,
+        address: CIpAddress,
+        src_port: u16,
+        dst_port: u16,
+    ) -> u8 {
+        match self {
+            &mut SmolStackType::VirtualTun(ref mut smol_stack) => {
+                smol_stack.tcp_connect(socket_handle_key, address, src_port, dst_port)
+            }
+            &mut SmolStackType::Tun(ref mut smol_stack) => {
+                smol_stack.tcp_connect(socket_handle_key, address, src_port, dst_port)
+            }
+            &mut SmolStackType::Tap(ref mut smol_stack) => {
+                smol_stack.tcp_connect(socket_handle_key, address, src_port, dst_port)
+            }
+        }
+    }
+    
+
     pub fn get_smol_socket(&mut self, socket_handle_key: usize) -> Option<&mut SmolSocket> {
         match self {
             &mut SmolStackType::VirtualTun(ref mut smol_stack) => {
@@ -306,6 +328,14 @@ pub struct CIpv4Address {
     pub address: [u8; 4],
 }
 
+#[repr(C)]
+pub struct CIpAddress {
+    pub is_ipv4: u8,
+    pub ipv4_address: CIpv4Address,
+    pub ipv6_address: CIpv6Address,
+
+}
+
 impl Into<Ipv4Address> for CIpv4Address {
     fn into(self) -> Ipv4Address {
         Ipv4Address::new(
@@ -325,6 +355,17 @@ impl Into<IpAddress> for CIpv4Address {
             self.address[2],
             self.address[3],
         )
+    }
+}
+
+
+impl Into<IpAddress> for CIpAddress {
+    fn into(self) -> IpAddress {
+        if self.is_ipv4==1 {
+            self.ipv4_address.into()
+        } else {
+            self.ipv6_address.into()
+        }
     }
 }
 
@@ -522,10 +563,11 @@ pub extern "C" fn smol_stack_smol_socket_receive(
     socket_handle_key: usize,
     cbuffer: *mut CBuffer,
     allocate_function: extern "C" fn(size: usize) -> *mut u8,
+    address: *mut CIpAddress
 ) -> u8 {
     let smol_socket = smol_stack.get_smol_socket(socket_handle_key);
     match smol_socket {
-        Some(smol_socket) => smol_socket.receive(cbuffer, allocate_function),
+        Some(smol_socket) => smol_socket.receive(cbuffer, allocate_function, address),
         None => 1,
     }
 }
@@ -536,10 +578,11 @@ pub extern "C" fn smol_stack_smol_socket_receive_wait(
     socket_handle_key: usize,
     cbuffer: *mut CBuffer,
     allocate_function: extern "C" fn(size: usize) -> *mut u8,
+    address: *mut CIpAddress
 ) -> u8 {
     let smol_socket = smol_stack.get_smol_socket(socket_handle_key);
     match smol_socket {
-        Some(smol_socket) => smol_socket.receive_wait(cbuffer, allocate_function),
+        Some(smol_socket) => smol_socket.receive_wait(cbuffer, allocate_function, address),
         None => 1,
     }
 }
@@ -560,6 +603,17 @@ pub extern "C" fn smol_stack_add_socket(
 #[no_mangle]
 pub extern "C" fn smol_stack_phy_wait(smol_stack: &mut SmolStackType, timestamp: i64) {
     smol_stack.phy_wait(timestamp)
+}
+
+#[no_mangle]
+pub extern "C" fn smol_stack_tcp_connect(
+    smol_stack: &mut SmolStackType,
+    socket_handle_key: usize,
+    address: CIpAddress,
+    src_port: u16,
+    dst_port: u16,
+) -> u8 {
+    smol_stack.tcp_connect(socket_handle_key, address, src_port, dst_port)
 }
 
 #[no_mangle]

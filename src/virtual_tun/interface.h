@@ -72,6 +72,13 @@ namespace smoltcp
         uint16_t address[8];
     };
 
+    struct CIpAddress
+    {
+        uint8_t isIpv4 = 0;
+        CIpv4Address ipv4Address;
+        CIpv6Address ipv6Address;
+    };
+
     struct CIpv4Cidr
     {
         CIpv4Address address;
@@ -110,12 +117,13 @@ namespace smoltcp
     extern "C" void smol_stack_phy_wait(SmolStackPtr, int64_t timestamp);
     extern "C" void smol_stack_spin(SmolStackPtr, SocketHandle socketHandle);
     extern "C" void smol_stack_spin_all(SmolStackPtr);
+    extern "C" void smol_stack_tcp_connect(SmolStackPtr, SocketHandle socketHandle, CIpAddress, uint8_t src_port, uint8_t dst_port);
     extern "C" void smol_stack_tcp_connect_ipv4(SmolStackPtr, SocketHandle socketHandle, CIpv4Address, uint8_t src_port, uint8_t dst_port);
     extern "C" void smol_stack_tcp_connect_ipv6(SmolStackPtr, SocketHandle socketHandle, CIpv6Address, uint8_t src_port, uint8_t dst_port);
     extern "C" uint8_t smol_stack_smol_socket_send(SmolStackPtr, SocketHandle socketHandle, const uint8_t *data, size_t len, CIpEndpoint endpoint, void *, uint8_t (*)(void *));
     extern "C" uint8_t smol_stack_smol_socket_send_copy(SmolStackPtr, SocketHandle socketHandle, const uint8_t *data, size_t len, CIpEndpoint endpoint);
     extern "C" uint8_t smol_stack_smol_socket_receive(SmolStackPtr, SocketHandle socketHandle, CBuffer *cbuffer, uint8_t *(*)(size_t));
-    extern "C" uint8_t smol_stack_smol_socket_receive_wait(SmolStackPtr, SocketHandle socketHandle, CBuffer *cbuffer, uint8_t *(*)(size_t));
+    extern "C" uint8_t smol_stack_smol_socket_receive_wait(SmolStackPtr, SocketHandle socketHandle, CBuffer *cbuffer, uint8_t *(*)(size_t), CIpAddress* address);
     extern "C" void smol_stack_add_ipv4_address(SmolStackPtr, CIpv4Cidr);
     extern "C" void smol_stack_add_ipv6_address(SmolStackPtr, CIpv6Cidr);
     extern "C" void smol_stack_add_default_v4_gateway(SmolStackPtr, CIpv4Address);
@@ -273,15 +281,16 @@ namespace smoltcp
             smol_stack_smol_socket_send_copy(smolStackPtr, smolSocket.handle, data, len, endpoint);
         }
 
-        std::optional<std::shared_ptr<Buffer>> receive(SmolSocket smolSocket)
+        std::optional<std::pair<std::shared_ptr<Buffer>, CIpAddress>> receive(SmolSocket smolSocket)
         {
             CBuffer cbuffer;
+            CIpAddress address;
 
             uint8_t r = smol_stack_smol_socket_receive(smolStackPtr, smolSocket.handle, &cbuffer, &cpp_allocate_buffer);
             if (r == 0)
             {
                 auto buffer = std::make_shared<Buffer>(cbuffer);
-                return std::optional<std::shared_ptr<Buffer>>(buffer);
+                return std::optional<std::make_pair<std::shared_ptr<Buffer>, CIpAddress>>(buffer, address);
             }
             else
             {
@@ -290,20 +299,26 @@ namespace smoltcp
         }
 
         //TODO: return an optional or the buffer since it waits so we're sure it returns a buffer?
-        std::optional<std::shared_ptr<Buffer>> receiveWait(SmolSocket smolSocket)
+        std::optional<std::pair<std::shared_ptr<Buffer>, CIpAddress>> receiveWait(SmolSocket smolSocket)
         {
             CBuffer cbuffer;
+            CIpAddress address;
 
-            uint8_t r = smol_stack_smol_socket_receive_wait(smolStackPtr, smolSocket.handle, &cbuffer, &cpp_allocate_buffer);
+            uint8_t r = smol_stack_smol_socket_receive_wait(smolStackPtr, smolSocket.handle, &cbuffer, &cpp_allocate_buffer, &address);
             if (r == 0)
             {
                 auto buffer = std::make_shared<Buffer>(cbuffer);
-                return std::optional<std::shared_ptr<Buffer>>(buffer);
+                return std::optional<std::make_pair<std::shared_ptr<Buffer>, CIpAddress>>(buffer, address);
             }
             else
             {
                 return std::nullopt;
             }
+        }
+
+        void connect(SmolSocket smolSocket, CIpAddress address, uint8_t src_port, uint8_t dst_port)
+        {
+            smol_stack_tcp_connect(smolStackPtr, smolSocket.handle, address, src_port, dst_port);
         }
 
         void connectIpv4(SmolSocket smolSocket, CIpv4Address address, uint8_t src_port, uint8_t dst_port)

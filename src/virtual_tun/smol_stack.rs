@@ -1,5 +1,5 @@
 //use smoltcp_openvpn_bridge::virtual_tun::VirtualTunInterface;
-use super::interface::{CBuffer, CIpv4Address, CIpv4Cidr, CIpv6Address, CIpv6Cidr};
+use super::interface::{CBuffer, CIpAddress, CIpv4Address, CIpv4Cidr, CIpv6Address, CIpv6Cidr};
 use super::virtual_tun::VirtualTunInterface as TunDevice;
 use smoltcp::iface::{Interface, InterfaceBuilder, Routes};
 use smoltcp::phy::wait as phy_wait;
@@ -81,6 +81,8 @@ pub struct SmolSocket {
         the poller loop is unlocked
     */
     has_data: Option<Arc<(Mutex<()>, Condvar)>>,
+    //The endpoint that this socket is connected to (TCP case)
+    endpoint: Option<IpAddress>,
 }
 
 impl<'a> SmolSocket {
@@ -96,6 +98,7 @@ impl<'a> SmolSocket {
             current_to_send: None,
             received: Arc::new(Mutex::new(VecDeque::new())),
             has_data: has_data,
+            endpoint: None,
         }
     }
 
@@ -117,6 +120,7 @@ impl<'a> SmolSocket {
         &mut self,
         cbuffer: *mut CBuffer,
         allocate_function: extern "C" fn(size: usize) -> *mut u8,
+        address: *mut CIpAddress,
     ) -> u8 {
         let s;
         {
@@ -134,6 +138,7 @@ impl<'a> SmolSocket {
                         len: s.len(),
                     };
                 }
+                //TODO:!!!!! fill CIpAddress here
                 0
             }
             None => 1,
@@ -145,6 +150,7 @@ impl<'a> SmolSocket {
         &mut self,
         cbuffer: *mut CBuffer,
         allocate_function: extern "C" fn(size: usize) -> *mut u8,
+        address: *mut CIpAddress,
     ) -> u8 {
         let mut s;
         loop {
@@ -177,6 +183,8 @@ impl<'a> SmolSocket {
                 //Unlock the poller thread because new data is available
                 has_data_condition_variable.notify_all();
                 */
+                //TODO:!!!!! fill CIpAddress here
+
                 0
             }
             None => 1,
@@ -307,6 +315,40 @@ where
         }
     }
 
+    pub fn tcp_connect(
+        &mut self,
+        smol_socket_handle: usize,
+        address: CIpAddress,
+        src_port: u16,
+        dst_port: u16,
+    ) -> u8 {
+        let smol_socket_ = self.smol_sockets.get_mut(&smol_socket_handle);
+        match smol_socket_ {
+            Some(smol_socket) => {
+                let socket_handle = smol_socket.socket_handle;
+                let mut socket = self.sockets.get::<TcpSocket>(socket_handle);
+                let endpoint_ = Into::<IpAddress>::into(address);
+                let endpoint: IpAddress = endpoint_.into();
+                let r = socket.connect((endpoint_, dst_port), src_port);
+                smol_socket.endpoint = Some(endpoint);
+                match r {
+                    Ok(_) => {
+                        //println!("connection ok");
+                        0
+                    }
+                    _ => {
+                        println!("connection error");
+                        2
+                    }
+                }
+            }
+            None => {
+                println!("NO smol socket");
+                1
+            }
+        }
+    }
+
     pub fn tcp_connect_ipv4(
         &mut self,
         smol_socket_handle: usize,
@@ -314,15 +356,18 @@ where
         src_port: u16,
         dst_port: u16,
     ) -> u8 {
-        let smol_socket_ = self.smol_sockets.get(&smol_socket_handle);
+        let smol_socket_ = self.smol_sockets.get_mut(&smol_socket_handle);
         match smol_socket_ {
             Some(smol_socket) => {
                 let socket_handle = smol_socket.socket_handle;
                 let mut socket = self.sockets.get::<TcpSocket>(socket_handle);
-                let r = socket.connect((Into::<Ipv4Address>::into(address), dst_port), src_port);
+                let endpoint_ = Into::<IpAddress>::into(address);
+                let endpoint: IpAddress = endpoint_.into();
+                let r = socket.connect((endpoint_, dst_port), src_port);
+                smol_socket.endpoint = Some(endpoint);
                 match r {
                     Ok(_) => {
-                        println!("connection ok");
+                        //println!("connection ok");
                         0
                     }
                     _ => {
