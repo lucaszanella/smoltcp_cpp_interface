@@ -67,8 +67,11 @@ int main()
             {
                 std::cout << "connecting..." << std::endl;
                 uint16_t randomOutputPort = tunSmolStack.randomOutputPort();
-                tunSmolStack.connectIpv4(smolSocket, CIpv4Address{{172, 217, 28, 238}},
-                                         randomOutputPort, 80);
+                CIpAddress cIpAddress{
+                    1,
+                    CIpv4Address{{172, 217, 28, 238}}};
+                tunSmolStack.connect(smolSocket, cIpAddress,
+                                     randomOutputPort, 80);
                 state = State::Request;
             }
             if (state == State::Request)
@@ -82,10 +85,12 @@ int main()
             }
             if (state == State::Response)
             {
-                auto buffer = tunSmolStack.receive(smolSocket);
-                if (buffer)
+                auto pair = tunSmolStack.receive(smolSocket);
+                if (pair)
                 {
-                    printBuffer(buffer.data.get(), buffer.len);
+                    auto buffer = pair.value().first;
+                    auto address = pair.value().second;
+                    printBuffer(buffer->data.get(), buffer->len);
                 }
                 else
                 {

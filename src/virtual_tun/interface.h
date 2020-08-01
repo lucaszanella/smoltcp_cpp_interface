@@ -8,6 +8,7 @@
 #include <iostream>
 #include <memory>
 #include <optional>
+#include <utility>
 
 typedef void *SmolStackPtr;
 typedef size_t SocketHandle;
@@ -123,7 +124,7 @@ namespace smoltcp
     extern "C" uint8_t smol_stack_smol_socket_send(SmolStackPtr, SocketHandle socketHandle, const uint8_t *data, size_t len, CIpEndpoint endpoint, void *, uint8_t (*)(void *));
     extern "C" uint8_t smol_stack_smol_socket_send_copy(SmolStackPtr, SocketHandle socketHandle, const uint8_t *data, size_t len, CIpEndpoint endpoint);
     extern "C" uint8_t smol_stack_smol_socket_receive(SmolStackPtr, SocketHandle socketHandle, CBuffer *cbuffer, uint8_t *(*)(size_t));
-    extern "C" uint8_t smol_stack_smol_socket_receive_wait(SmolStackPtr, SocketHandle socketHandle, CBuffer *cbuffer, uint8_t *(*)(size_t), CIpAddress* address);
+    extern "C" uint8_t smol_stack_smol_socket_receive_wait(SmolStackPtr, SocketHandle socketHandle, CBuffer *cbuffer, uint8_t *(*)(size_t), CIpAddress *address);
     extern "C" void smol_stack_add_ipv4_address(SmolStackPtr, CIpv4Cidr);
     extern "C" void smol_stack_add_ipv6_address(SmolStackPtr, CIpv6Cidr);
     extern "C" void smol_stack_add_default_v4_gateway(SmolStackPtr, CIpv4Address);
@@ -290,7 +291,8 @@ namespace smoltcp
             if (r == 0)
             {
                 auto buffer = std::make_shared<Buffer>(cbuffer);
-                return std::optional<std::make_pair<std::shared_ptr<Buffer>, CIpAddress>>(buffer, address);
+                auto pair = std::make_pair(buffer, address);
+                return std::optional<decltype(pair)>(pair);
             }
             else
             {
@@ -308,7 +310,8 @@ namespace smoltcp
             if (r == 0)
             {
                 auto buffer = std::make_shared<Buffer>(cbuffer);
-                return std::optional<std::make_pair<std::shared_ptr<Buffer>, CIpAddress>>(buffer, address);
+                auto pair = std::make_pair(buffer, address);
+                return std::optional<decltype(pair)>(pair);
             }
             else
             {

@@ -67,8 +67,11 @@ int main()
             {
                 std::cout << "connecting..." << std::endl;
                 uint16_t randomOutputPort = tunSmolStack.randomOutputPort();
-                tunSmolStack.connectIpv4(smolSocket, CIpv4Address{{172, 217, 28, 238}},
-                                         randomOutputPort, 80);
+                CIpAddress cIpAddress{
+                    1,
+                    CIpv4Address{{172, 217, 28, 238}}};
+                tunSmolStack.connect(smolSocket, cIpAddress,
+                                     randomOutputPort, 80);
                 state = State::Request;
             }
             if (state == State::Request)
@@ -82,28 +85,18 @@ int main()
             }
             if (state == State::Response)
             {
-                auto buffer = tunSmolStack.receive(smolSocket);
-                if (!buffer.empty)
+                auto pair = tunSmolStack.receive(smolSocket);
+                if (pair)
                 {
-                    printBuffer(buffer.data.get(), buffer.len);
+                    auto buffer = pair.value().first;
+                    auto address = pair.value().second;
+                    printBuffer(buffer->data.get(), buffer->len);
                 }
                 else
                 {
                 }
             }
-            auto buffer = tunSmolStack.virtualTunReceiveInstantly();
-            if (!buffer.empty)
-            {
-                //TODO: don't need to copy here, as `CBuffer` already owns this data?
-                uint8_t *raw_buffer = buffer.data.get();
-                std::cout << "stack received buffer with lenght " << buffer.len << std::endl;
-                for (size_t i = 0; i < buffer.len; i++)
-                {
-                    std::cout << (int) raw_buffer[i] << " ";
-                }
-            } else {
-                //std::cout << ".";
-            }
+
             tunSmolStack.spin(smolSocket);
             //tunSmolStack.phy_wait(tunSmolStack.currentTimeMillis());
         }

@@ -23,7 +23,13 @@ set_target_properties(smoltcp_cpp PROPERTIES
             CXX_EXTENSIONS OFF)
 
 add_executable(http_smol_tcp_tun_example ${CMAKE_CURRENT_SOURCE_DIR}/examples/http_smol_tcp_tun_example)
+set_target_properties(http_smol_tcp_tun_example PROPERTIES
+            CXX_STANDARD 17
+            CXX_EXTENSIONS OFF)
 add_executable(http_smol_tcp_virtual_tun_example ${CMAKE_CURRENT_SOURCE_DIR}/examples/http_smol_tcp_virtual_tun_example)
+set_target_properties(http_smol_tcp_virtual_tun_example PROPERTIES
+            CXX_STANDARD 17
+            CXX_EXTENSIONS OFF)
 
 target_link_libraries(http_smol_tcp_tun_example smoltcp_cpp lsmoltcp_cpp_interface_rust dl pthread)
 target_link_libraries(http_smol_tcp_virtual_tun_example smoltcp_cpp lsmoltcp_cpp_interface_rust dl pthread)
