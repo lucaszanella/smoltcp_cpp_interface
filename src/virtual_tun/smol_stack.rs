@@ -108,13 +108,14 @@ impl<'a> SmolSocket {
         {
             panic!("this socket type needs an endpoint to send to");
         }
-        //println!("packet sent!");
+        //println!("packet being sent on SmolSocket!");
         self.to_send.lock().unwrap().push_back(packet);
         let (mutex, has_data_condition_variable) = &*self.has_data.as_ref().unwrap().clone();
         //Unlock the poller thread because new data is available
         has_data_condition_variable.notify_all();
         0
     }
+
     //TODO: figure out a better way than copying. Inneficient receive
     pub fn receive(
         &mut self,
@@ -329,8 +330,12 @@ where
                 let mut socket = self.sockets.get::<TcpSocket>(socket_handle);
                 let endpoint_ = Into::<IpAddress>::into(address);
                 let endpoint: IpAddress = endpoint_.into();
+                //println!("smol stack going to connect to {} with dst_port {} and src_port {}", endpoint, dst_port, src_port);
                 let r = socket.connect((endpoint_, dst_port), src_port);
                 smol_socket.endpoint = Some(endpoint);
+                let (mutex, has_data_condition_variable) = &*self.has_data.as_ref().unwrap().clone();
+                //Unlock the poller thread because new data is available
+                has_data_condition_variable.notify_all();
                 match r {
                     Ok(_) => {
                         //println!("connection ok");
@@ -343,8 +348,32 @@ where
                 }
             }
             None => {
-                println!("NO smol socket");
+                panic!("NO smol socket");
                 1
+            }
+        }
+    }
+
+    pub fn may_send(&mut self, smol_socket_handle: usize) -> u8 {
+        let smol_socket = self.smol_sockets.get_mut(&smol_socket_handle);
+        let socket_handle = smol_socket.as_ref().unwrap().socket_handle.clone();
+        let socket_type = &smol_socket.unwrap().socket_type;
+
+        match socket_type {
+            SocketType::TCP => {
+                let socket = self.sockets.get::<TcpSocket>(socket_handle.clone());
+                if socket.may_send() {
+                    0
+                } else {
+                    1
+                }
+            },
+            SocketType::UDP => {
+                let socket = self.sockets.get::<UdpSocket>(socket_handle.clone());
+                panic!("not implemented yet");
+            }
+            _ => {
+                panic!("not implemented yet");
             }
         }
     }
@@ -365,6 +394,9 @@ where
                 let endpoint: IpAddress = endpoint_.into();
                 let r = socket.connect((endpoint_, dst_port), src_port);
                 smol_socket.endpoint = Some(endpoint);
+                let (mutex, has_data_condition_variable) = &*self.has_data.as_ref().unwrap().clone();
+                //Unlock the poller thread because new data is available
+                has_data_condition_variable.notify_all();
                 match r {
                     Ok(_) => {
                         //println!("connection ok");
@@ -377,7 +409,7 @@ where
                 }
             }
             None => {
-                println!("NO smol socket");
+                panic!("NO smol socket");
                 1
             }
         }
@@ -396,6 +428,9 @@ where
                 let socket_handle = smol_socket.socket_handle;
                 let mut socket = self.sockets.get::<TcpSocket>(socket_handle);
                 let r = socket.connect((Into::<Ipv6Address>::into(address), dst_port), src_port);
+                let (mutex, has_data_condition_variable) = &*self.has_data.as_ref().unwrap().clone();
+                //Unlock the poller thread because new data is available
+                has_data_condition_variable.notify_all();
                 match r {
                     Ok(_) => 0,
                     _ => 2,

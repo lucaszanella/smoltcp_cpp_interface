@@ -27,10 +27,16 @@ namespace smoltcp
         size_t len;
     };
 
+    struct NoDeleter
+    {
+        void operator()(uint8_t *b) { std::cout << "not going to delete Buffer" << std::endl; }
+    };
+
     //BIG TODO: does this delete everything or just the pointed value?
     struct Buffer
     {
     public:
+        using Ptr = std::shared_ptr<Buffer>;
         std::unique_ptr<uint8_t[]> data;
         size_t len = 0;
         Buffer(CBuffer cBuffer)
@@ -109,6 +115,8 @@ namespace smoltcp
 
     extern "C" void cppDeleteArray(uint8_t *data);
     extern "C" void cppDeletePointer(uint8_t *data);
+    extern "C" uint8_t *cpp_allocate_buffer(size_t size);
+    extern "C" uint8_t *cpp_allocate_buffer_zero_terminated(size_t size);
 
     extern "C" SmolStackPtr smol_stack_smol_stack_new_virtual_tun(const char *interfaceName);
     extern "C" SmolStackPtr smol_stack_smol_stack_new_tun(const char *interfaceName);
@@ -118,13 +126,14 @@ namespace smoltcp
     extern "C" void smol_stack_phy_wait(SmolStackPtr, int64_t timestamp);
     extern "C" void smol_stack_spin(SmolStackPtr, SocketHandle socketHandle);
     extern "C" void smol_stack_spin_all(SmolStackPtr);
-    extern "C" void smol_stack_tcp_connect(SmolStackPtr, SocketHandle socketHandle, CIpAddress, uint8_t src_port, uint8_t dst_port);
-    extern "C" void smol_stack_tcp_connect_ipv4(SmolStackPtr, SocketHandle socketHandle, CIpv4Address, uint8_t src_port, uint8_t dst_port);
-    extern "C" void smol_stack_tcp_connect_ipv6(SmolStackPtr, SocketHandle socketHandle, CIpv6Address, uint8_t src_port, uint8_t dst_port);
+    extern "C" uint8_t smol_stack_tcp_connect(SmolStackPtr, SocketHandle socketHandle, CIpAddress, uint16_t src_port, uint16_t dst_port);
+    extern "C" uint8_t smol_stack_tcp_connect_ipv4(SmolStackPtr, SocketHandle socketHandle, CIpv4Address, uint16_t src_port, uint16_t dst_port);
+    extern "C" uint8_t smol_stack_tcp_connect_ipv6(SmolStackPtr, SocketHandle socketHandle, CIpv6Address, uint16_t src_port, uint16_t dst_port);
     extern "C" uint8_t smol_stack_smol_socket_send(SmolStackPtr, SocketHandle socketHandle, const uint8_t *data, size_t len, CIpEndpoint endpoint, void *, uint8_t (*)(void *));
     extern "C" uint8_t smol_stack_smol_socket_send_copy(SmolStackPtr, SocketHandle socketHandle, const uint8_t *data, size_t len, CIpEndpoint endpoint);
     extern "C" uint8_t smol_stack_smol_socket_receive(SmolStackPtr, SocketHandle socketHandle, CBuffer *cbuffer, uint8_t *(*)(size_t));
     extern "C" uint8_t smol_stack_smol_socket_receive_wait(SmolStackPtr, SocketHandle socketHandle, CBuffer *cbuffer, uint8_t *(*)(size_t), CIpAddress *address);
+    extern "C" uint8_t smol_stack_smol_socket_may_send(SmolStackPtr, SocketHandle socketHandle);
     extern "C" void smol_stack_add_ipv4_address(SmolStackPtr, CIpv4Cidr);
     extern "C" void smol_stack_add_ipv6_address(SmolStackPtr, CIpv6Cidr);
     extern "C" void smol_stack_add_default_v4_gateway(SmolStackPtr, CIpv4Address);
@@ -277,9 +286,37 @@ namespace smoltcp
             smol_stack_smol_socket_send(smolStackPtr, smolSocket.handle, data, len, endpoint, static_cast<void *>(pointerToSmolOwner), smolOwnerDestructor);
         }
 
-        void send_copy(SmolSocket smolSocket, const uint8_t *data, size_t len, CIpEndpoint endpoint)
+        bool send_copy(SmolSocket smolSocket, const uint8_t *data, size_t len, CIpEndpoint endpoint)
         {
-            smol_stack_smol_socket_send_copy(smolStackPtr, smolSocket.handle, data, len, endpoint);
+            uint8_t r = smol_stack_smol_socket_send_copy(smolStackPtr, smolSocket.handle, data, len, endpoint);
+            if (r == 0)
+            {
+                return true;
+            }
+            else
+            {
+                return false;
+            }
+        }
+
+        //TCP only, no endpoint
+        bool send_copy(SmolSocket smolSocket, const uint8_t *data, size_t len)
+        {
+            CIpEndpoint endpointNone{
+                CIpEndpointType::None,
+                CIpv4Address{},
+                CIpv6Address{},
+                0};
+
+            uint8_t r = smol_stack_smol_socket_send_copy(smolStackPtr, smolSocket.handle, data, len, endpointNone);
+            if (r == 0)
+            {
+                return true;
+            }
+            else
+            {
+                return false;
+            }
         }
 
         std::optional<std::pair<std::shared_ptr<Buffer>, CIpAddress>> receive(SmolSocket smolSocket)
@@ -300,7 +337,6 @@ namespace smoltcp
             }
         }
 
-        //TODO: return an optional or the buffer since it waits so we're sure it returns a buffer?
         std::optional<std::pair<std::shared_ptr<Buffer>, CIpAddress>> receiveWait(SmolSocket smolSocket)
         {
             CBuffer cbuffer;
@@ -319,14 +355,60 @@ namespace smoltcp
             }
         }
 
-        void connect(SmolSocket smolSocket, CIpAddress address, uint8_t src_port, uint8_t dst_port)
+        bool maySend(SmolSocket smolSocket)
         {
-            smol_stack_tcp_connect(smolStackPtr, smolSocket.handle, address, src_port, dst_port);
+            uint8_t r = smol_stack_smol_socket_may_send(smolStackPtr, smolSocket.handle);
+            if (r == 0)
+                return true;
+            else
+                return false;
         }
 
-        void connectIpv4(SmolSocket smolSocket, CIpv4Address address, uint8_t src_port, uint8_t dst_port)
+        /*
+            Use your own custom allocator. Might be useful specially for ZLMediaKit which requires a buffer terminated with a \0
+        */
+        std::optional<std::pair<std::shared_ptr<Buffer>, CIpAddress>> receiveWait(SmolSocket smolSocket, uint8_t *(*custom_allocator)(size_t))
         {
-            smol_stack_tcp_connect_ipv4(smolStackPtr, smolSocket.handle, address, src_port, dst_port);
+            CBuffer cbuffer;
+            CIpAddress address;
+
+            uint8_t r = smol_stack_smol_socket_receive_wait(smolStackPtr, smolSocket.handle, &cbuffer, custom_allocator, &address);
+            if (r == 0)
+            {
+                auto buffer = std::make_shared<Buffer>(cbuffer);
+                auto pair = std::make_pair(buffer, address);
+                return std::optional<decltype(pair)>(pair);
+            }
+            else
+            {
+                return std::nullopt;
+            }
+        }
+
+        bool connect(SmolSocket smolSocket, CIpAddress address, uint16_t src_port, uint16_t dst_port)
+        {
+            uint8_t r = smol_stack_tcp_connect(smolStackPtr, smolSocket.handle, address, src_port, dst_port);
+            if (r == 0)
+            {
+                return true;
+            }
+            else
+            {
+                return false;
+            }
+        }
+
+        bool connectIpv4(SmolSocket smolSocket, CIpv4Address address, uint16_t src_port, uint16_t dst_port)
+        {
+            uint8_t r = smol_stack_tcp_connect_ipv4(smolStackPtr, smolSocket.handle, address, src_port, dst_port);
+            if (r == 0)
+            {
+                return true;
+            }
+            else
+            {
+                return false;
+            }
         }
 
         uint16_t randomOutputPort()
@@ -334,9 +416,17 @@ namespace smoltcp
             return random(mt);
         }
 
-        void connectIpv6(SmolSocket smolSocket, CIpv6Address address, uint8_t src_port, uint8_t dst_port)
+        bool connectIpv6(SmolSocket smolSocket, CIpv6Address address, uint16_t src_port, uint16_t dst_port)
         {
-            smol_stack_tcp_connect_ipv6(smolStackPtr, smolSocket.handle, address, src_port, dst_port);
+            uint8_t r = smol_stack_tcp_connect_ipv6(smolStackPtr, smolSocket.handle, address, src_port, dst_port);
+            if (r == 0)
+            {
+                return true;
+            }
+            else
+            {
+                return false;
+            }
         }
 
         void addIpv4Address(CIpv4Cidr cidr)
@@ -379,37 +469,35 @@ namespace smoltcp
             smol_stack_virtual_tun_send(smolStackPtr, data, len);
         }
 
-        Buffer virtualTunReceiveWait()
+        std::optional<std::shared_ptr<Buffer>> virtualTunReceiveWait()
         {
             CBuffer cbuffer;
 
             uint8_t r = smol_stack_virtual_tun_receive_wait(smolStackPtr, &cbuffer, &cpp_allocate_buffer);
             if (r == 0)
             {
-                auto buffer = Buffer(cbuffer);
+                auto buffer = std::make_shared<Buffer>(cbuffer);
                 return buffer;
             }
             else
             {
-                auto buffer = Buffer(true);
-                return buffer;
+                return std::nullopt;
             }
         }
 
-        Buffer virtualTunReceiveInstantly()
+        std::optional<std::shared_ptr<Buffer>> virtualTunReceiveInstantly()
         {
             CBuffer cbuffer;
 
             uint8_t r = smol_stack_virtual_tun_receive_instantly(smolStackPtr, &cbuffer, &cpp_allocate_buffer);
             if (r == 0)
             {
-                auto buffer = Buffer(cbuffer);
+                auto buffer = std::make_shared<Buffer>(cbuffer);
                 return buffer;
             }
             else
             {
-                auto buffer = Buffer(true);
-                return buffer;
+                return std::nullopt;
             }
         }
 

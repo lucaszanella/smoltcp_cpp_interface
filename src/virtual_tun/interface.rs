@@ -150,6 +150,23 @@ impl<'a, 'b: 'a, 'c: 'a + 'b> SmolStackType<'a, 'b, 'c> {
         }
     }
     
+    pub fn may_send(
+        &mut self,
+        socket_handle_key: usize
+    ) -> u8 {
+        match self {
+            &mut SmolStackType::VirtualTun(ref mut smol_stack) => {
+                smol_stack.may_send(socket_handle_key)
+            }
+            &mut SmolStackType::Tun(ref mut smol_stack) => {
+                smol_stack.may_send(socket_handle_key)
+            }
+            &mut SmolStackType::Tap(ref mut smol_stack) => {
+                smol_stack.may_send(socket_handle_key)
+            }
+        }
+    }
+    
 
     pub fn get_smol_socket(&mut self, socket_handle_key: usize) -> Option<&mut SmolSocket> {
         match self {
@@ -585,6 +602,14 @@ pub extern "C" fn smol_stack_smol_socket_receive_wait(
         Some(smol_socket) => smol_socket.receive_wait(cbuffer, allocate_function, address),
         None => 1,
     }
+}
+
+#[no_mangle]
+pub extern "C" fn smol_stack_smol_socket_may_send(
+    smol_stack: &mut SmolStackType,
+    socket_handle_key: usize,
+) -> u8 {
+    smol_stack.may_send(socket_handle_key)
 }
 
 #[no_mangle]
