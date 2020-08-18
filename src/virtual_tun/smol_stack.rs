@@ -81,6 +81,12 @@ pub struct SmolSocket {
         the poller loop is unlocked
     */
     has_data: Option<Arc<(Mutex<()>, Condvar)>>,
+    /*
+        Specific for SmolSocket, used to unlock receive_wait, which
+        is unlocked by SmolStack when new data is written to this 
+        SmolSocket
+    */
+    smol_socket_has_data: Arc<(Mutex<()>, Condvar)>,
     //The endpoint that this socket is connected to (TCP case)
     endpoint: Option<IpAddress>,
 }
@@ -98,6 +104,7 @@ impl<'a> SmolSocket {
             current_to_send: None,
             received: Arc::new(Mutex::new(VecDeque::new())),
             has_data: has_data,
+            smol_socket_has_data: Arc::new((Mutex::new(()), Condvar::new())),
             endpoint: None,
         }
     }
@@ -165,12 +172,22 @@ impl<'a> SmolSocket {
                 }
                 None => {}
             }
-            let (mutex, has_data_condition_variable) = &*self.has_data.as_ref().unwrap().clone();
+            let (mutex, has_data_condition_variable) = &*self.smol_socket_has_data.as_ref().clone();
             has_data_condition_variable.wait(mutex.lock().unwrap());
+            //let (mutex, has_data_condition_variable) = &*self.has_data.as_ref().unwrap().clone();
+            //has_data_condition_variable.wait(mutex.lock().unwrap());
         }
+        use std::io::{self, Write};
         match s {
             Some(s) => {
                 let p: *mut u8 = allocate_function(s.len());
+                if s[0]== 36 {
+                    //print!("$");
+                    //io::stdout().flush().unwrap();
+                } else {
+                    //println!("{}", s[0]);
+                }
+                //println!("bufferlen {}, len+1: {}",  s.len(),  s.len()+1);
                 unsafe { ptr::copy(s.as_ptr(), p, s.len()) };
                 unsafe {
                     *cbuffer = CBuffer {
@@ -330,7 +347,7 @@ where
                 let mut socket = self.sockets.get::<TcpSocket>(socket_handle);
                 let endpoint_ = Into::<IpAddress>::into(address);
                 let endpoint: IpAddress = endpoint_.into();
-                //println!("smol stack going to connect to {} with dst_port {} and src_port {}", endpoint, dst_port, src_port);
+                println!("smol stack going to connect to {} with dst_port {} and src_port {}", endpoint, dst_port, src_port);
                 let r = socket.connect((endpoint_, dst_port), src_port);
                 smol_socket.endpoint = Some(endpoint);
                 let (mutex, has_data_condition_variable) = &*self.has_data.as_ref().unwrap().clone();
@@ -378,6 +395,7 @@ where
         }
     }
 
+    //deprecated
     pub fn tcp_connect_ipv4(
         &mut self,
         smol_socket_handle: usize,
@@ -415,6 +433,7 @@ where
         }
     }
 
+    //deprecated
     pub fn tcp_connect_ipv6(
         &mut self,
         smol_socket_handle: usize,
@@ -556,6 +575,9 @@ where
                     //Outside of match because it matches as reference so we cannot move
                     if put_back {
                         println!("ATTENTION: putting the packet back");
+                        use std::process;
+                        //TODO: take off exit when things are better reviewed
+                        process::exit(1);
                         smol_socket.current_to_send = packet;
                     }
                 } else {
@@ -571,9 +593,14 @@ where
                                 s.copy_from_slice(data);
                                 smol_socket.received.lock().unwrap().push_back(s);
                             }
+                            let has_data = smol_socket.smol_socket_has_data.as_ref();
+                            let (_, smol_socket_has_data_condition_variable) = &*has_data.clone();
+                            smol_socket_has_data_condition_variable.notify_all();
+                            /*
                             let has_data = smol_socket.has_data.as_ref().unwrap();
                             let (_, has_data_condition_variable) = &*has_data.clone();
                             has_data_condition_variable.notify_all();
+                            */
                             (len, ())
                         })
                         .unwrap();
@@ -591,6 +618,7 @@ where
         }
     }
 
+    //VirtualTun only
     //Send a packet to the stack (Ethernet/IP)
     //not to confuse with TCP/UDP/etc packets
     pub fn send(&mut self, blob: Blob) -> u8 {
@@ -606,6 +634,7 @@ where
     /*
         TODO: figure out a better way than copying. Inneficient receive
     */
+    //VirtualTun only
     //Receive a packet from the stack (Ethernet/IP)
     //not to confuse with TCP/UDP/etc packets
     //TODO: Rename to receive_wait()?
@@ -615,6 +644,7 @@ where
         allocate_function: extern "C" fn(size: usize) -> *mut u8,
     ) -> u8 {
         let s;
+
         //let has_data = &*self.has_data.as_ref().unwrap().clone();
         let packets_from_inside = &*self.packets_from_inside.as_ref().unwrap().clone();
         {
@@ -633,6 +663,8 @@ where
                 unsafe { ptr::copy(s.as_ptr(), p, s.len()) };
                 //Sends the pointer back to C++, which has the responsibility
                 //to delete it
+                //TODO: remove +1
+
                 unsafe {
                     *cbuffer = CBuffer {
                         data: p,

@@ -74,15 +74,29 @@ impl<'a, 'b: 'a, 'c: 'a + 'b> SmolStackType<'a, 'b, 'c> {
 
     pub fn new_tun(interface_name: String) -> Box<SmolStackType<'a, 'b, 'c>> {
         let device = TunDevice::new(interface_name.as_str()).unwrap();
+        let has_data = Arc::new((Mutex::new(()), Condvar::new()));
         let fd = Some(device.as_raw_fd());
-        let smol_stack = SmolStack::new(device, fd, None, None, None);
+        let smol_stack = SmolStack::new(
+            device,
+            None,
+            None,
+            None,
+            Some(has_data.clone()),
+        );
         Box::new(SmolStackType::Tun(smol_stack))
     }
 
     pub fn new_tap(interface_name: String) -> Box<SmolStackType<'a, 'b, 'c>> {
         let device = TapDevice::new(interface_name.as_str()).unwrap();
+        let has_data = Arc::new((Mutex::new(()), Condvar::new()));
         let fd = Some(device.as_raw_fd());
-        let smol_stack = SmolStack::new(device, fd, None, None, None);
+        let smol_stack = SmolStack::new(
+            device,
+            None,
+            None,
+            None,
+            Some(has_data.clone()),
+        );
         Box::new(SmolStackType::Tap(smol_stack))
     }
 
@@ -333,7 +347,7 @@ impl<'a, 'b: 'a, 'c: 'a + 'b> SmolStackType<'a, 'b, 'c> {
     pub fn send(&mut self, blob: Blob) -> u8 {
         match self {
             &mut SmolStackType::VirtualTun(ref mut smol_stack) => smol_stack.send(blob),
-            _ => panic!("receive is only for VirtualTun")
+            _ => panic!("send is only for VirtualTun")
             //&mut SmolStackType::Tun(ref mut smol_stack) => smol_stack.receive(cbuffer, allocate_function),
             //&mut SmolStackType::Tap(ref mut smol_stack) => smol_stack.receive(cbuffer, allocate_function),
         }

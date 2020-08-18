@@ -9,6 +9,7 @@
 #include <memory>
 #include <optional>
 #include <utility>
+#include "utils.h"
 
 typedef void *SmolStackPtr;
 typedef size_t SocketHandle;
@@ -199,6 +200,8 @@ namespace smoltcp
 
     class TunSmolStack
     {
+        public:
+        using Ptr = std::shared_ptr<TunSmolStack>;
     private:
         SmolStackPtr smolStackPtr;
         std::random_device rd;
@@ -223,12 +226,10 @@ namespace smoltcp
             }
             else if (stackType == StackType::Tun)
             {
-                std::cout << "creating TUN device" << std::endl;
                 smolStackPtr = smol_stack_smol_stack_new_tun(interfaceName.c_str());
             }
             else if (stackType == StackType::Tap)
             {
-                std::cout << "creating TAP device" << std::endl;
                 smolStackPtr = smol_stack_smol_stack_new_tap(interfaceName.c_str());
             }
         }
@@ -339,12 +340,40 @@ namespace smoltcp
 
         std::optional<std::pair<std::shared_ptr<Buffer>, CIpAddress>> receiveWait(SmolSocket smolSocket)
         {
+            //std::cout << "receiveWait" << std::endl;    
             CBuffer cbuffer;
             CIpAddress address;
 
             uint8_t r = smol_stack_smol_socket_receive_wait(smolStackPtr, smolSocket.handle, &cbuffer, &cpp_allocate_buffer, &address);
             if (r == 0)
             {
+                //printBufferBeggining(cbuffer.data, cbuffer.len, 5);
+                //std::cout << "...";
+                //printBufferEnd(cbuffer.data, cbuffer.len, 5);
+
+                auto buffer = std::make_shared<Buffer>(cbuffer);
+                auto pair = std::make_pair(buffer, address);
+                return std::optional<decltype(pair)>(pair);
+            }
+            else
+            {
+                return std::nullopt;
+            }
+        }
+
+         /*
+            Use your own custom allocator. Might be useful specially for ZLMediaKit which requires a buffer terminated with a \0
+        */
+        std::optional<std::pair<std::shared_ptr<Buffer>, CIpAddress>> receiveWait(SmolSocket smolSocket, uint8_t *(*custom_allocator)(size_t))
+        {
+            CBuffer cbuffer;
+            CIpAddress address;
+
+            uint8_t r = smol_stack_smol_socket_receive_wait(smolStackPtr, smolSocket.handle, &cbuffer, custom_allocator, &address);
+            if (r == 0)
+            {
+                //std::cout << "#(" << cbuffer.len << ") - ";
+                //Utils::compactBufferPrint(cbuffer.data, cbuffer.len, 5);
                 auto buffer = std::make_shared<Buffer>(cbuffer);
                 auto pair = std::make_pair(buffer, address);
                 return std::optional<decltype(pair)>(pair);
@@ -362,27 +391,6 @@ namespace smoltcp
                 return true;
             else
                 return false;
-        }
-
-        /*
-            Use your own custom allocator. Might be useful specially for ZLMediaKit which requires a buffer terminated with a \0
-        */
-        std::optional<std::pair<std::shared_ptr<Buffer>, CIpAddress>> receiveWait(SmolSocket smolSocket, uint8_t *(*custom_allocator)(size_t))
-        {
-            CBuffer cbuffer;
-            CIpAddress address;
-
-            uint8_t r = smol_stack_smol_socket_receive_wait(smolStackPtr, smolSocket.handle, &cbuffer, custom_allocator, &address);
-            if (r == 0)
-            {
-                auto buffer = std::make_shared<Buffer>(cbuffer);
-                auto pair = std::make_pair(buffer, address);
-                return std::optional<decltype(pair)>(pair);
-            }
-            else
-            {
-                return std::nullopt;
-            }
         }
 
         bool connect(SmolSocket smolSocket, CIpAddress address, uint16_t src_port, uint16_t dst_port)
